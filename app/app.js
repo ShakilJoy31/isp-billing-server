@@ -14,7 +14,7 @@ app.set("view engine", "ejs");
 app.get("/health", (_, res) => res.status(200).json({ message: "ok" }));
 // app.use(viewRoutes);
 app.get("/", (req, res) => {
-  res.send("Welcome to hospital Backend!");
+  res.send("Welcome to ISP billing Server!");
 });
 app.use(apiRoutes);
 

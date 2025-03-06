@@ -1,97 +1,116 @@
-const AuthorityUser = require("../../models/authorityUser");
-const User = require("../../models/User");
+const ClientInformation = require("../../models/Authentication/client.model");
 
-const createUser = async (req, res, next) => {
+const generateUniqueUserId = async () => {
+  let userId;
+  let isUnique = false;
+
+  while (!isUnique) {
+    // Generate a random 7-digit number
+    userId = Math.floor(1000000 + Math.random() * 9000000);
+
+    // Check if the userId already exists in the database
+    const existingUser = await ClientInformation.findOne({ where: { userId } });
+    if (!existingUser) {
+      isUnique = true;
+    }
+  }
+  return userId;
+};
+
+const createClient = async (req, res, next) => {
   try {
     const {
-      dateOfBirth,
-      district,
-      email,
-      gender,
+      package,
+      location,
+      flatAptNo,
       houseNo,
-      mobileNumber,
-      name,
-      password,
-      thana,
+      roadNo,
+      area,
+      email,
       role,
+      fullName,
+      landmark,
+      mobileNo,
+      nidNo,
+      phoneNo,
     } = req.body;
 
-    // Check if the user already exists based on email
-    const existingUser = await User.findOne({ where: { email } });
-    if (existingUser) {
+    // Check if the entry already exists based on email
+    const existingEntry = await ClientInformation.findOne({ where: { email } });
+    if (existingEntry) {
       return res.status(409).json({
-        message: "User with this email already exists",
+        message: "This email already exists! Try different.",
       });
     }
 
-    // Create a new user entry
-    const newUser = await User.create({
-      dateOfBirth,
-      district,
-      email,
-      gender,
+    // Generate a unique 7-digit userId
+    const userId = await generateUniqueUserId();
+
+    // Create a new entry
+    const newEntry = await ClientInformation.create({
+      package,
+      location,
+      flatAptNo,
       houseNo,
-      mobileNumber,
-      name,
-      password, // Ideally, hash the password before saving
-      thana,
+      roadNo,
+      area,
+      email,
       role,
+      userId,
+      fullName,
+      landmark,
+      mobileNo,
+      password: mobileNo,
+      status: 'pending',
+      nidNo,
+      phoneNo,
     });
 
     return res.status(201).json({
-      message: "User created successfully",
-      user: newUser,
+      message: "Client information created successfully!",
+      data: newEntry,
     });
   } catch (error) {
     next(error);
   }
 };
 
-const createAuthorityUser = async (req, res, next) => {
+
+
+const checkUserCredentials = async (req, res, next) => {
   try {
-    const {
-      dateOfBirth,
-      email,
-      image,
-      gender,
-      mobileNumber,
-      name,
-      password,
-      role,
-      doctorId,
-    } = req.body;
+    const { userId, password } = req.body;
 
-    // Check if the user already exists based on email
-    const existingUser = await AuthorityUser.findOne({ where: { email } });
-    if (existingUser) {
-      return res.status(409).json({
-        message: "User with this email already exists!",
-      });
-    }
-
-    // Validation: Ensure doctorId is provided if the role is doctor
-    if (role === "doctor" && !doctorId) {
+    // Check if userId and password are provided
+    if (!userId || !password) {
       return res.status(400).json({
-        message: "Doctor ID is required for doctor or doctor assistant role",
+        message: "Both userId and password are required.",
       });
     }
 
-    // Create a new user entry
-    const newUser = await AuthorityUser.create({
-      dateOfBirth,
-      email,
-      image,
-      gender,
-      mobileNumber,
-      name,
-      password,
-      role,
-      doctorId: (role === "doctor" || role === 'doctor-assistant') ? doctorId : null,
-    });
+    // Find the user by userId
+    const user = await ClientInformation.findOne({ where: { userId } });
 
-    return res.status(201).json({
-      message: "User created successfully",
-      user: newUser,
+    // If user does not exist
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found. Please check your userId.",
+      });
+    }
+
+    console.log(user.password, password)
+
+    // Check if the password matches
+    if (user.password !== password) {
+      return res.status(401).json({
+        message: "Incorrect password. Please try again.",
+      });
+    }
+
+    // If everything is correct, return success
+    return res.status(200).json({
+      message: "Login successful!",
+      data: user,
     });
   } catch (error) {
     next(error);
@@ -100,38 +119,7 @@ const createAuthorityUser = async (req, res, next) => {
 
 
 
-const updateAuthorityUserAccount = async (req, res, next) => {
-  try {
-    const id = req.params.id;
-    if (!id) {
-      return res.status(400).json({ message: "User ID is required" });
-    }
-
-    // Fetch the current user data
-    const currentUser = await AuthorityUser.findOne({ where: { id } });
-    if (!currentUser) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    // Update the user data
-    await AuthorityUser.update(
-      { ...req.body, picture: req.filelink }, // Merge request body and filelink
-      {
-        where: { id },
-      }
-    );
-
-    // Fetch the updated user data from AuthorityUser
-    const updatedUser = await AuthorityUser.findOne({ where: { id } });
-
-    res.status(200).json({
-      message: "User updated successfully",
-      user: updatedUser,
-    });
-  } catch (error) {
-    next(error);
-  }
-};
 
 
-module.exports = { createUser, createAuthorityUser, updateAuthorityUserAccount };
+
+module.exports = { createClient, checkUserCredentials};
