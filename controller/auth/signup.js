@@ -32,7 +32,7 @@ const createClient = async (req, res, next) => {
       landmark,
       mobileNo,
       nidNo,
-      phoneNo,
+      referCode,
     } = req.body;
 
     // Check if the entry already exists based on email
@@ -63,7 +63,7 @@ const createClient = async (req, res, next) => {
       password: mobileNo,
       status: 'pending',
       nidNo,
-      phoneNo,
+      referCode,
     });
 
     return res.status(201).json({
@@ -98,8 +98,6 @@ const checkUserCredentials = async (req, res, next) => {
       });
     }
 
-    console.log(user.password, password)
-
     // Check if the password matches
     if (user.password !== password) {
       return res.status(401).json({
@@ -119,7 +117,48 @@ const checkUserCredentials = async (req, res, next) => {
 
 
 
+const getClientsByReferCode = async (req, res, next) => {
+  try {
+    const { userId } = req.params; // Assuming userId is passed as a URL parameter
+    const { page = 1, limit = 10 } = req.query; // Default page is 1 and limit is 10
+
+    // Convert page and limit to numbers
+    const pageNumber = parseInt(page, 10);
+    const limitNumber = parseInt(limit, 10);
+
+    // Calculate the offset for pagination
+    const offset = (pageNumber - 1) * limitNumber;
+
+    // Find all clients where referCode matches the provided userId with pagination
+    const { count, rows: clients } = await ClientInformation.findAndCountAll({
+      where: { referCode: userId },
+      limit: limitNumber,
+      offset: offset,
+    });
+
+    if (clients.length === 0) {
+      return res.status(404).json({
+        message: "No clients found with the provided referCode.",
+      });
+    }
+
+    // Calculate total pages
+    const totalPages = Math.ceil(count / limitNumber);
+
+    return res.status(200).json({
+      message: "Clients retrieved successfully!",
+      data: clients,
+      pagination: {
+        totalItems: count,
+        totalPages: totalPages,
+        currentPage: pageNumber,
+        itemsPerPage: limitNumber,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
 
-
-module.exports = { createClient, checkUserCredentials};
+module.exports = { createClient, checkUserCredentials, getClientsByReferCode};

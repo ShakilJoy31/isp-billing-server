@@ -1,5 +1,5 @@
 const express = require("express");
-const { createClient, checkUserCredentials } = require("../controller/auth/signup");
+const { checkUserCredentials } = require("../controller/auth/signup");
 const { createTicket, getTicketsByUser } = require("../controller/ticket/ticket");
 const router = express.Router();
 

@@ -30,6 +30,8 @@ const generateTicketId = async () => {
     return newId; // Return the new `id` as a number
 };
 
+
+
 const createTicket = async (req, res, next) => {
     try {
         const { title, description, ticketMadeBy } = req.body;
@@ -82,9 +84,22 @@ const createTicket = async (req, res, next) => {
 const getTicketsByUser = async (req, res, next) => {
     try {
         const { ticketMadeBy } = req.params; // Assuming ticketMadeBy is passed as a URL parameter
+        const { page = 1, limit = 10 } = req.query; // Default page is 1 and limit is 10
 
-        // Find all tickets made by the specified user
-        const tickets = await Ticket.findAll({ where: { ticketMadeBy } });
+        // Convert page and limit to numbers
+        const pageNumber = parseInt(page, 10);
+        const limitNumber = parseInt(limit, 10);
+
+        // Calculate the offset for pagination
+        const offset = (pageNumber - 1) * limitNumber;
+
+        // Find all tickets made by the specified user with pagination and sorting
+        const { count, rows: tickets } = await Ticket.findAndCountAll({
+            where: { ticketMadeBy },
+            limit: limitNumber,
+            offset: offset,
+            order: [['createdAt', 'DESC']], // Sort by createdAt in descending order (newest first)
+        });
 
         if (tickets.length === 0) {
             return res.status(404).json({
@@ -92,14 +107,24 @@ const getTicketsByUser = async (req, res, next) => {
             });
         }
 
+        // Calculate total pages
+        const totalPages = Math.ceil(count / limitNumber);
+
         return res.status(200).json({
             message: "Tickets retrieved successfully!",
             data: tickets,
+            pagination: {
+                totalItems: count,
+                totalPages: totalPages,
+                currentPage: pageNumber,
+                itemsPerPage: limitNumber,
+            },
         });
     } catch (error) {
         next(error);
     }
 };
+
 
 
 module.exports = { createTicket,getTicketsByUser };

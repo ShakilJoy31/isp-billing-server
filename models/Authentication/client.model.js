@@ -68,7 +68,7 @@ const ClientInformation = sequelize.define("client-information", {
     type: dt.STRING,
     allowNull: false,
   },
-  phoneNo: {
+  referCode: {
     type: dt.STRING,
     allowNull: false,
   },
