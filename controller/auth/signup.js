@@ -1,3 +1,4 @@
+const AuthorityInformation = require("../../models/Authentication/authority.model");
 const ClientInformation = require("../../models/Authentication/client.model");
 
 const generateUniqueUserId = async () => {
@@ -75,6 +76,171 @@ const createClient = async (req, res, next) => {
   }
 };
 
+// Update client to approve or reject.
+const updateClient = async (req, res, next) => {
+  try {
+    const { id } = req.params; // Get the client ID from the request parameters
+    const {
+      package,
+      location,
+      flatAptNo,
+      houseNo,
+      roadNo,
+      area,
+      email,
+      role,
+      fullName,
+      landmark,
+      mobileNo,
+      nidNo,
+      status,
+      referCode,
+    } = req.body; // Get updated data from the request body
+
+    // Check if the client exists
+    const existingClient = await ClientInformation.findOne({ where: { id } });
+    if (!existingClient) {
+      return res.status(404).json({
+        message: "Client not found!",
+      });
+    }
+
+    // Check if the new email already exists (if email is being updated)
+    if (email && email !== existingClient.email) {
+      const emailExists = await ClientInformation.findOne({ where: { email } });
+      if (emailExists) {
+        return res.status(409).json({
+          message: "This email already exists! Try a different one.",
+        });
+      }
+    }
+
+    // Update the client's information
+    await ClientInformation.update(
+      {
+        package,
+        location,
+        flatAptNo,
+        houseNo,
+        roadNo,
+        area,
+        email,
+        role,
+        fullName,
+        landmark,
+        mobileNo,
+        nidNo,
+        status,
+        referCode,
+      },
+      {
+        where: { id }, // Update the client with the specified ID
+        returning: true, // Return the updated record
+        plain: true,
+      }
+    );
+
+    // Fetch the updated client data
+    const updatedData = await ClientInformation.findOne({ where: { id } });
+
+    return res.status(200).json({
+      message: "Client information updated successfully!",
+      data: updatedData,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Deleet client according to id....
+const deleteClient = async (req, res, next) => {
+  try {
+    const { id } = req.params; // Get the client ID from the request parameters
+
+    // Check if the client exists
+    const existingClient = await ClientInformation.findOne({ where: { id } });
+    if (!existingClient) {
+      return res.status(404).json({
+        message: "Client not found!",
+      });
+    }
+
+    // Delete the client
+    await ClientInformation.destroy({
+      where: { id }, // Delete the client with the specified ID
+    });
+
+    return res.status(200).json({
+      message: "Client deleted successfully!",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+const createAuthority = async (req, res, next) => {
+  try {
+    const {
+      address,
+      age,
+      bloodGroup,
+      dateOfBirth,
+      email,
+      fatherOrSpouseName,
+      fullName,
+      jobCategory,
+      jobType,
+      maritalStatus,
+      mobileNo,
+      nidOrPassportNo,
+      religion,
+      role,
+      sex,
+    } = req.body;
+
+    // Check if the entry already exists based on email
+    const existingEntry = await AuthorityInformation.findOne({ where: { email } });
+    if (existingEntry) {
+      return res.status(409).json({
+        message: "This email already exists! Try different.",
+      });
+    }
+
+    // Generate a unique 7-digit userId
+    const userId = await generateUniqueUserId();
+
+    // Create a new entry
+    const newEntry = await AuthorityInformation.create({
+      address,
+      age,
+      bloodGroup,
+      dateOfBirth,
+      email,
+      fatherOrSpouseName,
+      fullName,
+      jobCategory,
+      jobType,
+      maritalStatus,
+      mobileNo,
+      nidOrPassportNo,
+      religion,
+      role,
+      sex,
+      userId,
+      password: mobileNo,
+      status: 'pending',
+    });
+
+    return res.status(201).json({
+      message: "Authority information created successfully!",
+      data: newEntry,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 
 
 const checkUserCredentials = async (req, res, next) => {
@@ -88,14 +254,19 @@ const checkUserCredentials = async (req, res, next) => {
       });
     }
 
-    // Find the user by userId
-    const user = await ClientInformation.findOne({ where: { userId } });
+    // Find the user by userId in ClientInformation table
+    let user = await ClientInformation.findOne({ where: { userId } });
 
-    // If user does not exist
+    // If user is not found in ClientInformation, search in AuthorityInformation
     if (!user) {
-      return res.status(404).json({
-        message: "User not found. Please check your userId.",
-      });
+      user = await AuthorityInformation.findOne({ where: { userId } });
+
+      // If user is not found in AuthorityInformation either
+      if (!user) {
+        return res.status(404).json({
+          message: "User not found. Please check your userId.",
+        });
+      }
     }
 
     // Check if the password matches
@@ -161,4 +332,115 @@ const getClientsByReferCode = async (req, res, next) => {
 };
 
 
-module.exports = { createClient, checkUserCredentials, getClientsByReferCode};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Getting users, client and authority
+const getAllClients = async (req, res, next) => {
+  try {
+    const { page = 1, limit = 10 } = req.query; // Default page is 1 and limit is 10
+
+    // Convert page and limit to numbers
+    const pageNumber = parseInt(page, 10);
+    const limitNumber = parseInt(limit, 10);
+
+    // Calculate the offset for pagination
+    const offset = (pageNumber - 1) * limitNumber;
+
+    // Fetch all clients with pagination
+    const { count, rows: clients } = await ClientInformation.findAndCountAll({
+      limit: limitNumber,
+      offset: offset,
+    });
+
+    // If no clients are found
+    if (clients.length === 0) {
+      return res.status(404).json({
+        message: "No clients found.",
+      });
+    }
+
+    // Calculate total pages
+    const totalPages = Math.ceil(count / limitNumber);
+
+    return res.status(200).json({
+      message: "Clients retrieved successfully!",
+      data: clients,
+      pagination: {
+        totalItems: count,
+        totalPages: totalPages,
+        currentPage: pageNumber,
+        itemsPerPage: limitNumber,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+
+
+const getAllAuthorities = async (req, res, next) => {
+  try {
+    const { page = 1, limit = 10 } = req.query; // Default page is 1 and limit is 10
+
+    // Convert page and limit to numbers
+    const pageNumber = parseInt(page, 10);
+    const limitNumber = parseInt(limit, 10);
+
+    // Calculate the offset for pagination
+    const offset = (pageNumber - 1) * limitNumber;
+
+    // Fetch all authorities with pagination
+    const { count, rows: authorities } = await AuthorityInformation.findAndCountAll({
+      limit: limitNumber,
+      offset: offset,
+    });
+
+    // If no authorities are found
+    if (authorities.length === 0) {
+      return res.status(404).json({
+        message: "No authorities found.",
+      });
+    }
+
+    // Calculate total pages
+    const totalPages = Math.ceil(count / limitNumber);
+
+    return res.status(200).json({
+      message: "Authorities retrieved successfully!",
+      data: authorities,
+      pagination: {
+        totalItems: count,
+        totalPages: totalPages,
+        currentPage: pageNumber,
+        itemsPerPage: limitNumber,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+module.exports = { createClient, createAuthority, checkUserCredentials, getClientsByReferCode, getAllClients, getAllAuthorities, updateClient, deleteClient};
