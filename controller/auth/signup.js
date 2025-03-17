@@ -152,6 +152,32 @@ const updateClient = async (req, res, next) => {
   }
 };
 
+
+
+// Get specific client according to id
+const getClientById = async (req, res, next) => {
+  try {
+    const { id } = req.params; // Get the client ID from the request parameters
+
+    // Check if the client exists
+    const client = await ClientInformation.findOne({ where: { id } });
+    if (!client) {
+      return res.status(404).json({
+        message: "Client not found!",
+      });
+    }
+
+    // Return the client data
+    return res.status(200).json({
+      message: "Client data retrieved successfully!",
+      data: client,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
 // Deleet client according to id....
 const deleteClient = async (req, res, next) => {
   try {
@@ -400,6 +426,10 @@ const getAllClients = async (req, res, next) => {
 
 
 
+
+
+
+
 const getAllAuthorities = async (req, res, next) => {
   try {
     const { page = 1, limit = 10 } = req.query; // Default page is 1 and limit is 10
@@ -443,4 +473,147 @@ const getAllAuthorities = async (req, res, next) => {
 };
 
 
-module.exports = { createClient, createAuthority, checkUserCredentials, getClientsByReferCode, getAllClients, getAllAuthorities, updateClient, deleteClient};
+const getEmployeeById = async (req, res, next) => {
+  try {
+    const { id } = req.params; // Get the client ID from the request parameters
+
+    // Check if the client exists
+    const client = await AuthorityInformation.findOne({ where: { id } });
+    if (!client) {
+      return res.status(404).json({
+        message: "Employee not found!",
+      });
+    }
+
+    // Return the client data
+    return res.status(200).json({
+      message: "Employee data retrieved successfully!",
+      data: client,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const updateEmployee = async (req, res, next) => {
+  try {
+    const { id } = req.params; // Get the employee ID from the request parameters
+    const {
+      address,
+      age,
+      bloodGroup,
+      dateOfBirth,
+      email,
+      fatherOrSpouseName,
+      fullName,
+      jobCategory,
+      jobType,
+      maritalStatus,
+      mobileNo,
+      nidOrPassportNo,
+      religion,
+      role,
+      sex,
+      userId,
+      password,
+      status,
+    } = req.body; // Get updated data from the request body
+
+    // Check if the employee exists
+    const existingEmployee = await AuthorityInformation.findOne({ where: { id } });
+    if (!existingEmployee) {
+      return res.status(404).json({
+        message: "Employee not found!",
+      });
+    }
+
+    // Check if the new email already exists (if email is being updated)
+    if (email && email !== existingEmployee.email) {
+      const emailExists = await AuthorityInformation.findOne({ where: { email } });
+      if (emailExists) {
+        return res.status(409).json({
+          message: "This email already exists! Try a different one.",
+        });
+      }
+    }
+
+    // Check if the new userId already exists (if userId is being updated)
+    if (userId && userId !== existingEmployee.userId) {
+      const userIdExists = await AuthorityInformation.findOne({ where: { userId } });
+      if (userIdExists) {
+        return res.status(409).json({
+          message: "This user ID already exists! Try a different one.",
+        });
+      }
+    }
+
+    // Update the employee's information
+    await AuthorityInformation.update(
+      {
+        address,
+        age,
+        bloodGroup,
+        dateOfBirth,
+        email,
+        fatherOrSpouseName,
+        fullName,
+        jobCategory,
+        jobType,
+        maritalStatus,
+        mobileNo,
+        nidOrPassportNo,
+        religion,
+        role,
+        sex,
+        userId,
+        password,
+        status,
+      },
+      {
+        where: { id }, // Update the employee with the specified ID
+        returning: true, // Return the updated record
+        plain: true,
+      }
+    );
+
+    // Fetch the updated employee data
+    const updatedData = await AuthorityInformation.findOne({ where: { id } });
+
+    return res.status(200).json({
+      message: "Employee information updated successfully!",
+      data: updatedData,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+const deleteEmployee = async (req, res, next) => {
+  try {
+    const { id } = req.params; // Get the client ID from the request parameters
+
+    // Check if the client exists
+    const existingClient = await AuthorityInformation.findOne({ where: { id } });
+    if (!existingClient) {
+      return res.status(404).json({
+        message: "Client not found!",
+      });
+    }
+
+    // Delete the client
+    await AuthorityInformation.destroy({
+      where: { id }, // Delete the client with the specified ID
+    });
+
+    return res.status(200).json({
+      message: "Client deleted successfully!",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+
+module.exports = { deleteEmployee, updateEmployee, getEmployeeById, getClientById, createClient, createAuthority, checkUserCredentials, getClientsByReferCode, getAllClients, getAllAuthorities, updateClient, deleteClient};

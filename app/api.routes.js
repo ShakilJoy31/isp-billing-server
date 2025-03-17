@@ -1,3 +1,4 @@
+const areaRoutes = require("../routes/area.routes");
 const authenticationRoutes = require("../routes/authentication.routes");
 const packageRoutes = require("../routes/package.routes");
 const paymentRoutes = require("../routes/payment.routes");
@@ -12,5 +13,7 @@ router.use("/ticket", ticketRoutes);
 router.use("/payment", paymentRoutes);
 
 router.use("/package", packageRoutes)
+
+router.use("/area", areaRoutes)
 
 module.exports = router;

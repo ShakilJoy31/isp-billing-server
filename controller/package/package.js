@@ -75,4 +75,75 @@ const createPackage = async (req, res, next) => {
     }
 };
 
-module.exports = { createPackage, getAllPackages };
+
+const deletePackage = async (req, res, next) => {
+  try {
+      const { id } = req.params; // Extract the package ID from the request parameters
+
+      // Find the package by ID
+      const packageToDelete = await Package.findOne({ where: { id } });
+
+      // If the package doesn't exist, return a 404 response
+      if (!packageToDelete) {
+          return res.status(404).json({
+              message: "Package not found!",
+          });
+      }
+
+      // Delete the package
+      await packageToDelete.destroy();
+
+      return res.status(200).json({
+          message: "Package deleted successfully!",
+      });
+  } catch (error) {
+      next(error);
+  }
+};
+
+
+const updatePackage = async (req, res, next) => {
+  try {
+      const { id } = req.params; // Extract the package ID from the request parameters
+      const { packageName, packageBandwidth, packagePrice, packageDetails, status } = req.body; // Extract updated fields from the request body
+
+      // Find the package by ID
+      const packageToUpdate = await Package.findOne({ where: { id } });
+
+      // If the package doesn't exist, return a 404 response
+      if (!packageToUpdate) {
+          return res.status(404).json({
+              message: "Package not found!",
+          });
+      }
+
+      // Check if the new packageName already exists (if it's being updated)
+      if (packageName && packageName !== packageToUpdate.packageName) {
+          const existingPackage = await Package.findOne({ where: { packageName } });
+          if (existingPackage) {
+              return res.status(409).json({
+                  message: "A package with this name already exists! Try a different name.",
+              });
+          }
+      }
+
+      // Update the package fields
+      if (packageName) packageToUpdate.packageName = packageName;
+      if (packageBandwidth) packageToUpdate.packageBandwidth = packageBandwidth;
+      if (packagePrice) packageToUpdate.packagePrice = packagePrice;
+      if (packageDetails) packageToUpdate.packageDetails = packageDetails;
+      if (status) packageToUpdate.status = status;
+
+      // Save the updated package
+      await packageToUpdate.save();
+
+      return res.status(200).json({
+          message: "Package updated successfully!",
+          data: packageToUpdate,
+      });
+  } catch (error) {
+      next(error);
+  }
+};
+
+module.exports = { updatePackage, deletePackage, createPackage, getAllPackages };
