@@ -1,18 +1,22 @@
 const AuthorityInformation = require("../../models/Authentication/authority.model");
 const ClientInformation = require("../../models/Authentication/client.model");
 
-const generateUniqueUserId = async () => {
-  let userId;
+const generateUniqueUserId = async (fullName) => {
+  console.log(fullName)
+  let baseUserId = fullName.split(' ')[0].toLowerCase(); // Get the first part of the full name
+  let userId = `${baseUserId}@ringtel`;
   let isUnique = false;
+  let counter = 1;
 
   while (!isUnique) {
-    // Generate a random 7-digit number
-    userId = Math.floor(1000000 + Math.random() * 9000000);
-
     // Check if the userId already exists in the database
     const existingUser = await ClientInformation.findOne({ where: { userId } });
     if (!existingUser) {
       isUnique = true;
+    } else {
+      // If the userId exists, append a number and try again
+      userId = `${baseUserId}${counter}@ringtel`;
+      counter++;
     }
   }
   return userId;
@@ -44,8 +48,8 @@ const createClient = async (req, res, next) => {
       });
     }
 
-    // Generate a unique 7-digit userId
-    const userId = await generateUniqueUserId();
+    // Generate a unique userId based on the full name
+    const userId = await generateUniqueUserId(fullName);
 
     // Create a new entry
     const newEntry = await ClientInformation.create({
@@ -234,7 +238,7 @@ const createAuthority = async (req, res, next) => {
     }
 
     // Generate a unique 7-digit userId
-    const userId = await generateUniqueUserId();
+    const userId = await generateUniqueUserId(fullName);
 
     // Create a new entry
     const newEntry = await AuthorityInformation.create({
