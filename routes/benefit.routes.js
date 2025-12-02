@@ -1,5 +1,5 @@
 const express = require("express");
-const { createBenefit, getAllBenefits, getBenefitById, getBenefitByBenefitId, updateBenefit, deleteBenefit, getActiveBenefits, getBenefitStats, toggleBenefitStatus } = require("../controller/benefit/benefit.controller");
+const { createBenefit, getAllBenefits, getBenefitById, updateBenefit, deleteBenefit, getActiveBenefits, getBenefitStats, toggleBenefitStatus } = require("../controller/benefit/benefit.controller");
 const router = express.Router();
 
 

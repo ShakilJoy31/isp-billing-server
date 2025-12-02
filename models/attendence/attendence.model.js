@@ -1,5 +1,6 @@
 const { DataTypes: dt } = require("sequelize");
 const sequelize = require("../../database/connection");
+const AuthorityInformation = require("../Authentication/authority.model"); // Import the model
 
 const EmployeeAttendance = sequelize.define("EmployeeAttendance", {
   id: {
@@ -11,6 +12,10 @@ const EmployeeAttendance = sequelize.define("EmployeeAttendance", {
   employeeId: {
     type: dt.INTEGER,
     allowNull: false,
+    references: {
+      model: 'authority-informations', // Use the actual table name
+      key: 'id'
+    }
   },
   checkIn: {
     type: dt.STRING,
@@ -86,6 +91,12 @@ const EmployeeAttendance = sequelize.define("EmployeeAttendance", {
       fields: ['employeeId', 'date']
     }
   ]
+});
+
+// Define association
+EmployeeAttendance.belongsTo(AuthorityInformation, {
+  foreignKey: 'employeeId',
+  as: 'employee'
 });
 
 module.exports = EmployeeAttendance;

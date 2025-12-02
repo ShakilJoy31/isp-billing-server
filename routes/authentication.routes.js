@@ -1,5 +1,5 @@
 const express = require("express");
-const { createClient, checkUserCredentials, getClientsByReferCode, createAuthority, getAllClients, getAllAuthorities, updateClient, deleteClient, getClientById, getEmployeeById, updateEmployee, deleteEmployee } = require("../controller/auth/signup");
+const { createClient, checkUserCredentials, getClientsByReferCode, createAuthority, getAllClients, getAllAuthorities, updateClient, deleteClient, getClientById, getEmployeeById, updateEmployee, deleteEmployee, searchEmployeeAdvanced, getEmployeeByUserId } = require("../controller/auth/signup");
 const { addRolePermissions, getPermissionsForRole, getPermissions, updatePermission, roleAccordingToId } = require("../controller/user/role-permission");
 const router = express.Router();
 
@@ -25,8 +25,11 @@ router.post("/login", checkUserCredentials);
 router.post("/register-new-authority-user",createAuthority);
 router.get("/get-authority", getAllAuthorities);
 router.get("/get-employee-according-to-id/:id", getEmployeeById);
+router.get('/search', searchEmployeeAdvanced);
+router.get('/user/:userId', getEmployeeByUserId);
 router.put("/update-employee/:id", updateEmployee);
 router.delete("/delete-employee/:id", deleteEmployee);
+
 
 
 

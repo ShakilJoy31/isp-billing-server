@@ -10,7 +10,7 @@ const AuthorityInformation = sequelize.define("authority-information", {
   },
   address: {
     type: dt.STRING,
-    allowNull: false,
+    allowNull: false, 
   },
   age: {
     type: dt.STRING,

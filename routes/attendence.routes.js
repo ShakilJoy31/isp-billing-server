@@ -1,5 +1,5 @@
 const express = require("express");
-const { createMultipleEmployeeAttendance, getAllEmployeeAttendance, getEmployeeAttendanceById, getAttendanceByEmployee, updateEmployeeAttendance, deleteEmployeeAttendance, getAttendanceSummary } = require("../controller/attendence/attendence.controller");
+const { createMultipleEmployeeAttendance, getAllEmployeeAttendance, getEmployeeAttendanceById, getAttendanceByEmployee, updateEmployeeAttendance, deleteEmployeeAttendance, getAttendanceSummary, getEmployeeAttendanceStatistics } = require("../controller/attendence/attendence.controller");
 
 
 const router = express.Router();
@@ -12,5 +12,6 @@ router.get("/employee/:employeeId/attendance", getAttendanceByEmployee);
 router.put("/update-employee-attendance/:id", updateEmployeeAttendance);
 router.delete("/delete-employee-attendance/:id", deleteEmployeeAttendance);
 router.get("/attendance-summary", getAttendanceSummary);
+router.get("/employee-attendence-statistics/:userId", getEmployeeAttendanceStatistics);
 
 module.exports = attendanceRoutes = router;

@@ -49,11 +49,6 @@ const Benefit = sequelize.define("Benefit", {
     type: dt.DECIMAL(10, 2),
     allowNull: true,
   },
-  currency: {
-    type: dt.STRING,
-    allowNull: false,
-    defaultValue: 'BDT'
-  },
   billingCycle: {
     type: dt.ENUM('Monthly', 'Quarterly', 'Yearly', 'One-time'),
     allowNull: false,
