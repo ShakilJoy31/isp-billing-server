@@ -4,6 +4,9 @@ const packageRoutes = require("../routes/package.routes");
 const paymentRoutes = require("../routes/payment.routes");
 const salaryRoutes = require("../routes/salary.routes");
 const ticketRoutes = require("../routes/ticket")
+const attendanceRoutes = require("../routes/attendence.routes");
+const benefitRoutes = require("../routes/benefit.routes");
+const reminderRoutes = require("../routes/reminder.routes");
 
 const router = require("express").Router();
 
@@ -18,5 +21,13 @@ router.use("/package", packageRoutes)
 router.use("/area", areaRoutes)
 
 router.use("/salary", salaryRoutes);
+
+router.use("/attendance", attendanceRoutes);
+
+router.use("/benefit", benefitRoutes);
+
+router.use("/reminder", reminderRoutes);
+
+
 
 module.exports = router;

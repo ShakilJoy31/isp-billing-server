@@ -267,6 +267,7 @@ const createAuthority = async (req, res, next) => {
       data: newEntry,
     });
   } catch (error) {
+    console.log(error);
     next(error);
   }
 };
