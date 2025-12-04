@@ -1,13 +1,11 @@
-const Area = require("../../models/area/area");
-
-
+const City = require("../../models/area/area");
 
 const createArea = async (req, res, next) => {
   try {
     const { cityName, cityDetails, status } = req.body;
 
     // Check if the area already exists based on cityName
-    const existingArea = await Area.findOne({ where: { cityName } });
+    const existingArea = await City.findOne({ where: { cityName } });
     if (existingArea) {
       return res.status(409).json({
         message: "This area already exists! Try a different name.",
@@ -15,7 +13,7 @@ const createArea = async (req, res, next) => {
     }
 
     // Create a new area entry
-    const newArea = await Area.create({
+    const newArea = await City.create({
       cityName,
       cityDetails,
       status,
@@ -38,7 +36,7 @@ const getAllAreas = async (req, res, next) => {
       const offset = (page - 1) * limit; // Calculate the offset
   
       // Fetch paginated areas from the database
-      const { count, rows: areas } = await Area.findAndCountAll({
+      const { count, rows: areas } = await City.findAndCountAll({
         limit, // Number of records to fetch
         offset, // Starting point for fetching records
       });
@@ -75,7 +73,7 @@ const getAllAreas = async (req, res, next) => {
       const { cityName, cityDetails, status } = req.body; // Extract updated fields from the request body
   
       // Find the area by ID
-      const areaToUpdate = await Area.findOne({ where: { id } });
+      const areaToUpdate = await City.findOne({ where: { id } });
   
       // If the area doesn't exist, return a 404 response
       if (!areaToUpdate) {
@@ -86,7 +84,7 @@ const getAllAreas = async (req, res, next) => {
   
       // Check if the new cityName already exists (if it's being updated)
       if (cityName && cityName !== areaToUpdate.cityName) {
-        const existingArea = await Area.findOne({ where: { cityName } });
+        const existingArea = await City.findOne({ where: { cityName } });
         if (existingArea) {
           return res.status(409).json({
             message: "An area with this name already exists! Try a different name.",
@@ -116,7 +114,7 @@ const getAllAreas = async (req, res, next) => {
       const { id } = req.params; // Extract the area ID from the request parameters
   
       // Find the area by ID
-      const areaToDelete = await Area.findOne({ where: { id } });
+      const areaToDelete = await City.findOne({ where: { id } });
   
       // If the area doesn't exist, return a 404 response
       if (!areaToDelete) {
@@ -141,7 +139,7 @@ const getAllAreas = async (req, res, next) => {
   const getCityNames = async (req, res, next) => {
     try {
       // Fetch all areas from the database
-      const areas = await Area.findAll({
+      const areas = await City.findAll({
         attributes: ['cityName'], // Only fetch the cityName field
         group: ['cityName'], // Group by cityName to avoid duplicates
       });

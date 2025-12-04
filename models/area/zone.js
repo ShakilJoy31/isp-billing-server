@@ -26,6 +26,9 @@ const Zone = sequelize.define("Zone", {
     allowNull: false,
     defaultValue: "Active", // Default value
   },
+},{
+  tableName: 'zones',
+  timestamps: true,
 });
 
 module.exports = Zone;

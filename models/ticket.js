@@ -34,7 +34,8 @@ const Ticket = sequelize.define("Ticket", {
         allowNull: false,
     },
 }, {
-    timestamps: true, // Automatically adds `createdAt` and `updatedAt` fields
+    tableName: 'tickets',
+    timestamps: true,
 });
 
 module.exports = Ticket;

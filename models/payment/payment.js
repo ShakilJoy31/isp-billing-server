@@ -35,7 +35,8 @@ const Transaction = sequelize.define("Transaction", {
         allowNull: false,
     },
 }, {
-    timestamps: true, // Automatically adds `createdAt` and `updatedAt` fields
+    tableName: 'transactions',
+    timestamps: true,
 });
 
 module.exports = Transaction;

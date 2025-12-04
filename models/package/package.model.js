@@ -30,6 +30,9 @@ const Package = sequelize.define("Package", {
     allowNull: false,
     defaultValue: "Active", // Default value
   },
+},{
+  tableName: 'packages',
+  timestamps: true,
 });
 
 module.exports = Package;

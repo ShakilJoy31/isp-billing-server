@@ -262,15 +262,6 @@ const sendMessage = async (req, res, next) => {
 
 
 
-
-
-
-
-
-
-
-
-
 // Get all chats for a user
 const getUserChats = async (req, res, next) => {
   try {

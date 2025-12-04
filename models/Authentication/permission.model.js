@@ -26,6 +26,9 @@ const RolePermission = sequelize.define("role-permissions", {
       this.setDataValue("permissions", JSON.stringify(value));
     },
   },
+},{
+  tableName: 'role-permissions',
+  timestamps: true,
 });
 
 module.exports = RolePermission;

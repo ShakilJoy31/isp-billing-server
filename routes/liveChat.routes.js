@@ -2,7 +2,7 @@ const express = require("express");
 const { 
   createChat, 
   getUserChats, 
-  getAdminChats, // Add this
+  getAdminChats,
   getChatMessages, 
   sendMessage, 
   updateMessage, 

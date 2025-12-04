@@ -83,6 +83,9 @@ const AuthorityInformation = sequelize.define("authority-information", {
     allowNull: false,
     defaultValue: 'pending',
   },
+},{
+  tableName: 'authority-informations',
+  timestamps: true,
 });
 
 module.exports = AuthorityInformation;

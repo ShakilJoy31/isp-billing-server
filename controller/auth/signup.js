@@ -3,11 +3,6 @@ const AuthorityInformation = require("../../models/Authentication/authority.mode
 const ClientInformation = require("../../models/Authentication/client.model");
 const generateUniqueUserId = require("../../utils/helper/generateUniqueId");
 
-
-
-
-
-
 const createClient = async (req, res, next) => {
   try {
     const {
@@ -52,7 +47,7 @@ const createClient = async (req, res, next) => {
       landmark,
       mobileNo,
       password: mobileNo,
-      status: 'pending',
+      status: "pending",
       nidNo,
       referCode,
     });
@@ -85,6 +80,8 @@ const updateClient = async (req, res, next) => {
       nidNo,
       status,
       referCode,
+      password, // Add password to destructuring
+      currentPassword, // Optional: if you want to verify current password
     } = req.body; // Get updated data from the request body
 
     // Check if the client exists
@@ -105,33 +102,47 @@ const updateClient = async (req, res, next) => {
       }
     }
 
-    // Update the client's information
-    await ClientInformation.update(
-      {
-        package,
-        location,
-        flatAptNo,
-        houseNo,
-        roadNo,
-        area,
-        email,
-        role,
-        fullName,
-        landmark,
-        mobileNo,
-        nidNo,
-        status,
-        referCode,
-      },
-      {
-        where: { id }, // Update the client with the specified ID
-        returning: true, // Return the updated record
-        plain: true,
+    // Prepare update data
+    const updateData = {
+      package,
+      location,
+      flatAptNo,
+      houseNo,
+      roadNo,
+      area,
+      email,
+      role,
+      fullName,
+      landmark,
+      mobileNo,
+      nidNo,
+      status,
+      referCode,
+    };
+
+    // Handle password update if provided
+    if (password) {
+      if (currentPassword === existingClient.password) {
+        updateData.password = password;
+      } else {
+        return res.status(200).json({
+          message: "Password update failed! Current password is incorrect."
+        });
       }
-    );
+    }
+
+    // Update the client's information
+    await ClientInformation.update(updateData, {
+      where: { id }, // Update the client with the specified ID
+      returning: true, // Return the updated record
+      plain: true,
+    });
 
     // Fetch the updated client data
-    const updatedData = await ClientInformation.findOne({ where: { id } });
+    const updatedData = await ClientInformation.findOne({
+      where: { id },
+      attributes: { exclude: ["password"] }, // Exclude password from response for security
+    });
 
     return res.status(200).json({
       message: "Client information updated successfully!",
@@ -141,7 +152,6 @@ const updateClient = async (req, res, next) => {
     next(error);
   }
 };
-
 
 // Get specific client according to id
 const getClientById = async (req, res, next) => {
@@ -165,7 +175,6 @@ const getClientById = async (req, res, next) => {
     next(error);
   }
 };
-
 
 // Deleet client according to id....
 const deleteClient = async (req, res, next) => {
@@ -197,6 +206,9 @@ const deleteClient = async (req, res, next) => {
 
 
 
+
+
+
 //! The Authority
 const createAuthority = async (req, res, next) => {
   try {
@@ -219,7 +231,9 @@ const createAuthority = async (req, res, next) => {
     } = req.body;
 
     // Check if the entry already exists based on email
-    const existingEntry = await AuthorityInformation.findOne({ where: { email } });
+    const existingEntry = await AuthorityInformation.findOne({
+      where: { email },
+    });
     if (existingEntry) {
       return res.status(409).json({
         message: "This email already exists! Try different.",
@@ -248,7 +262,7 @@ const createAuthority = async (req, res, next) => {
       sex,
       userId,
       password: mobileNo,
-      status: 'pending',
+      status: "pending",
     });
 
     return res.status(201).json({
@@ -273,10 +287,11 @@ const getAllAuthorities = async (req, res, next) => {
     const offset = (pageNumber - 1) * limitNumber;
 
     // Fetch all authorities with pagination
-    const { count, rows: authorities } = await AuthorityInformation.findAndCountAll({
-      limit: limitNumber,
-      offset: offset,
-    });
+    const { count, rows: authorities } =
+      await AuthorityInformation.findAndCountAll({
+        limit: limitNumber,
+        offset: offset,
+      });
 
     // If no authorities are found
     if (authorities.length === 0) {
@@ -350,7 +365,9 @@ const updateEmployee = async (req, res, next) => {
     } = req.body; // Get updated data from the request body
 
     // Check if the employee exists
-    const existingEmployee = await AuthorityInformation.findOne({ where: { id } });
+    const existingEmployee = await AuthorityInformation.findOne({
+      where: { id },
+    });
     if (!existingEmployee) {
       return res.status(404).json({
         message: "Employee not found!",
@@ -359,7 +376,9 @@ const updateEmployee = async (req, res, next) => {
 
     // Check if the new email already exists (if email is being updated)
     if (email && email !== existingEmployee.email) {
-      const emailExists = await AuthorityInformation.findOne({ where: { email } });
+      const emailExists = await AuthorityInformation.findOne({
+        where: { email },
+      });
       if (emailExists) {
         return res.status(409).json({
           message: "This email already exists! Try a different one.",
@@ -369,7 +388,9 @@ const updateEmployee = async (req, res, next) => {
 
     // Check if the new userId already exists (if userId is being updated)
     if (userId && userId !== existingEmployee.userId) {
-      const userIdExists = await AuthorityInformation.findOne({ where: { userId } });
+      const userIdExists = await AuthorityInformation.findOne({
+        where: { userId },
+      });
       if (userIdExists) {
         return res.status(409).json({
           message: "This user ID already exists! Try a different one.",
@@ -423,7 +444,9 @@ const deleteEmployee = async (req, res, next) => {
     const { id } = req.params; // Get the client ID from the request parameters
 
     // Check if the client exists
-    const existingClient = await AuthorityInformation.findOne({ where: { id } });
+    const existingClient = await AuthorityInformation.findOne({
+      where: { id },
+    });
     if (!existingClient) {
       return res.status(404).json({
         message: "Client not found!",
@@ -448,7 +471,7 @@ const getEmployeeByUserId = async (req, res, next) => {
     const { userId } = req.params; // Get userId from request parameters
 
     // Check if userId is provided
-    if (!userId || userId.trim() === '') {
+    if (!userId || userId.trim() === "") {
       return res.status(400).json({
         message: "Please provide a userId.",
       });
@@ -456,7 +479,7 @@ const getEmployeeByUserId = async (req, res, next) => {
 
     // Find employee by userId
     const employee = await AuthorityInformation.findOne({
-      where: { userId: userId.trim() }
+      where: { userId: userId.trim() },
     });
 
     // If no employee found
@@ -481,7 +504,7 @@ const searchEmployeeAdvanced = async (req, res, next) => {
     const { query, page = 1, limit = 10 } = req.query;
 
     // Check if search query is provided
-    if (!query || query.trim() === '') {
+    if (!query || query.trim() === "") {
       return res.status(400).json({
         message: "Please provide a search query.",
       });
@@ -501,16 +524,17 @@ const searchEmployeeAdvanced = async (req, res, next) => {
         { mobileNo: { [Op.like]: `%${searchQuery}%` } },
         { userId: { [Op.like]: `%${searchQuery}%` } },
         { nidOrPassportNo: { [Op.like]: `%${searchQuery}%` } },
-      ]
+      ],
     };
 
     // Search for employees
-    const { count, rows: employees } = await AuthorityInformation.findAndCountAll({
-      where: searchConditions,
-      limit: limitNumber,
-      offset: offset,
-      order: [['fullName', 'ASC']],
-    });
+    const { count, rows: employees } =
+      await AuthorityInformation.findAndCountAll({
+        where: searchConditions,
+        limit: limitNumber,
+        offset: offset,
+        order: [["fullName", "ASC"]],
+      });
 
     // If no employees found
     if (employees.length === 0) {
@@ -538,40 +562,6 @@ const searchEmployeeAdvanced = async (req, res, next) => {
     next(error);
   }
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 const checkUserCredentials = async (req, res, next) => {
   try {
@@ -616,8 +606,6 @@ const checkUserCredentials = async (req, res, next) => {
   }
 };
 
-
-
 const getClientsByReferCode = async (req, res, next) => {
   try {
     const { userId } = req.params; // Assuming userId is passed as a URL parameter
@@ -660,29 +648,6 @@ const getClientsByReferCode = async (req, res, next) => {
     next(error);
   }
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Getting users, client and authority
 const getAllClients = async (req, res, next) => {
@@ -727,17 +692,19 @@ const getAllClients = async (req, res, next) => {
   }
 };
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-module.exports = { deleteEmployee, updateEmployee, getEmployeeById, getEmployeeByUserId, searchEmployeeAdvanced, getClientById, createClient, createAuthority, checkUserCredentials, getClientsByReferCode, getAllClients, getAllAuthorities, updateClient, deleteClient};
+module.exports = {
+  deleteEmployee,
+  updateEmployee,
+  getEmployeeById,
+  getEmployeeByUserId,
+  searchEmployeeAdvanced,
+  getClientById,
+  createClient,
+  createAuthority,
+  checkUserCredentials,
+  getClientsByReferCode,
+  getAllClients,
+  getAllAuthorities,
+  updateClient,
+  deleteClient,
+};

@@ -1,7 +1,7 @@
 const { DataTypes: dt } = require("sequelize");
 const sequelize = require("../../database/connection");
 
-const Area = sequelize.define("City", {
+const City = sequelize.define("City", {
   id: {
     type: dt.INTEGER,
     autoIncrement: true,
@@ -22,6 +22,9 @@ const Area = sequelize.define("City", {
     allowNull: false,
     defaultValue: "Active", // Default value
   },
+},{
+  tableName: 'cities',
+  timestamps: true,
 });
 
-module.exports = Area;
+module.exports = City;
