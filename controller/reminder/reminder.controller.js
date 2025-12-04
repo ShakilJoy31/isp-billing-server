@@ -199,6 +199,13 @@ const getReminderById = async (req, res, next) => {
   }
 };
 
+
+
+
+
+
+
+//! Problematic area need to be fixed. 
 // Update reminder
 const updateReminder = async (req, res, next) => {
   try {
@@ -235,6 +242,12 @@ const updateReminder = async (req, res, next) => {
     next(error);
   }
 };
+
+
+
+
+
+
 
 // Delete reminder
 const deleteReminder = async (req, res, next) => {
@@ -445,6 +458,134 @@ const cancelReminder = async (req, res, next) => {
   }
 };
 
+// Check if user has pending/warning reminders
+const getUserWarningStatus = async (req, res, next) => {
+  try {
+    const { customerEmail } = req.query;
+    
+    if (!customerEmail || customerEmail.trim() === '') {
+      return res.status(400).json({ 
+        message: "Customer email is required" 
+      });
+    }
+
+    const currentDate = new Date();
+    
+    // Find all reminders for this customer that are pending or failed
+    const customerReminders = await Reminder.findAll({
+      where: {
+        customerEmail: customerEmail.trim(),
+        status: { [Op.in]: ['Pending', 'Failed'] }
+      },
+      order: [['dueDate', 'ASC']]
+    });
+
+    if (!customerReminders || customerReminders.length === 0) {
+      return res.status(200).json({
+        message: "No pending reminders found for this user",
+        hasWarning: false,
+        warnings: [],
+        nextDueDate: null,
+        totalPending: 0
+      });
+    }
+
+    // Check each reminder to see if it should trigger a warning
+    const warnings = [];
+    let hasWarning = false;
+    let earliestDueDate = null;
+
+    for (const reminder of customerReminders) {
+      const dueDate = new Date(reminder.dueDate);
+      const scheduledAt = reminder.scheduledAt ? new Date(reminder.scheduledAt) : null;
+      
+      let warningReason = '';
+      let warningLevel = 'info'; // info, warning, danger
+      let shouldWarn = false;
+
+      // Rule 1: Check if due date has passed (Overdue)
+      if (dueDate < currentDate) {
+        warningReason = `Payment overdue since ${formatDate(dueDate)}`;
+        warningLevel = 'danger';
+        shouldWarn = true;
+        hasWarning = true;
+      }
+      // Rule 2: Check if due date is within 3 days (Approaching due date)
+      else {
+        const daysUntilDue = Math.ceil((dueDate - currentDate) / (1000 * 60 * 60 * 24));
+        
+        if (daysUntilDue <= 3 && daysUntilDue > 0) {
+          warningReason = `Payment due in ${daysUntilDue} day(s) (${formatDate(dueDate)})`;
+          warningLevel = 'warning';
+          shouldWarn = true;
+          hasWarning = true;
+        }
+        // Rule 3: Check if scheduled reminder time has arrived
+        else if (scheduledAt && scheduledAt <= currentDate) {
+          warningReason = `Scheduled reminder triggered for ${formatDate(dueDate)}`;
+          warningLevel = 'info';
+          shouldWarn = true;
+          hasWarning = true;
+        }
+      }
+
+      // Rule 4: Check for high priority reminders (always warn)
+      if (reminder.priority === 'High' && reminder.status === 'Pending') {
+        warningReason = `High priority reminder: ${reminder.reminderType}`;
+        warningLevel = 'warning';
+        shouldWarn = true;
+        hasWarning = true;
+      }
+
+      if (shouldWarn) {
+        warnings.push({
+          reminderId: reminder.id,
+          reminderType: reminder.reminderType,
+          packageName: reminder.packageName,
+          amountDue: reminder.amountDue,
+          dueDate: reminder.dueDate,
+          scheduledAt: reminder.scheduledAt,
+          status: reminder.status,
+          priority: reminder.priority,
+          warningReason,
+          warningLevel,
+          message: reminder.message
+        });
+      }
+
+      // Track earliest due date for response
+      if (!earliestDueDate || dueDate < new Date(earliestDueDate)) {
+        earliestDueDate = reminder.dueDate;
+      }
+    }
+
+    // Helper function to format dates
+    function formatDate(date) {
+      return new Date(date).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    }
+
+    return res.status(200).json({
+      message: hasWarning 
+        ? "User has pending warnings" 
+        : "No active warnings for user",
+      hasWarning,
+      warningCount: warnings.length,
+      warnings,
+      nextDueDate: earliestDueDate,
+      totalPending: customerReminders.length,
+      customerEmail: customerEmail.trim()
+    });
+
+  } catch (error) {
+    console.error("Error checking user warning status:", error);
+    next(error);
+  }
+};
+
 module.exports = {
   createReminder,
   getAllReminders,
@@ -454,5 +595,6 @@ module.exports = {
   sendReminder,
   getReminderStats,
   createBulkReminders,
-  cancelReminder
+  cancelReminder,
+  getUserWarningStatus
 };

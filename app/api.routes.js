@@ -7,6 +7,8 @@ const ticketRoutes = require("../routes/ticket")
 const attendanceRoutes = require("../routes/attendence.routes");
 const benefitRoutes = require("../routes/benefit.routes");
 const reminderRoutes = require("../routes/reminder.routes");
+const liveChatRoutes = require("../routes/liveChat.routes");
+const uploadWithMulter = require("../middleware/uploadWithMulter");
 
 const router = require("express").Router();
 
@@ -27,6 +29,14 @@ router.use("/attendance", attendanceRoutes);
 router.use("/benefit", benefitRoutes);
 
 router.use("/reminder", reminderRoutes);
+
+router.use("/live-chat", liveChatRoutes)
+
+
+router.post("/single", uploadWithMulter.single("file"), (req, res) => {
+  res.status(201).json({ url: req.filelink });
+});
+
 
 
 
