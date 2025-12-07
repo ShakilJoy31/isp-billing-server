@@ -13,18 +13,24 @@ const AuthorityInformation = sequelize.define("authority-information", {
     allowNull: false, 
   },
   age: {
-    type: dt.STRING,
+    type: dt.INTEGER,
     allowNull: false,
   },
   bloodGroup: {
     type: dt.STRING,
-    allowNull: false,
+    allowNull: true,
+    defaultValue: '',
   },
   dateOfBirth: {
     type: dt.DATE,
     allowNull: false,
   },
   email: {
+    type: dt.STRING,
+    allowNull: false,
+    unique: true,
+  },
+  photo: {
     type: dt.STRING,
     allowNull: false,
     unique: true,
@@ -39,7 +45,8 @@ const AuthorityInformation = sequelize.define("authority-information", {
   },
   jobCategory: {
     type: dt.STRING,
-    allowNull: false,
+    allowNull: true,
+    defaultValue: '',
   },
   jobType: {
     type: dt.STRING,
@@ -59,7 +66,8 @@ const AuthorityInformation = sequelize.define("authority-information", {
   },
   religion: {
     type: dt.STRING,
-    allowNull: false,
+    allowNull: true,
+    defaultValue: '',
   },
   role: {
     type: dt.STRING,
@@ -79,11 +87,26 @@ const AuthorityInformation = sequelize.define("authority-information", {
     allowNull: false,
   },
   status: {
-    type: dt.STRING,
+    type: dt.ENUM('active', 'inactive', 'pending'),
     allowNull: false,
     defaultValue: 'pending',
   },
-},{
+  baseSalary: {
+    type: dt.DECIMAL(10, 2),
+    allowNull: true,
+    defaultValue: 0.00,
+  },
+  createdAt: {
+    type: dt.DATE,
+    allowNull: false,
+    defaultValue: dt.NOW,
+  },
+  updatedAt: {
+    type: dt.DATE,
+    allowNull: false,
+    defaultValue: dt.NOW,
+  },
+}, {
   tableName: 'authority-informations',
   timestamps: true,
 });

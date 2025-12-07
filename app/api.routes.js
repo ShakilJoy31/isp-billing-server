@@ -33,10 +33,35 @@ router.use("/reminder", reminderRoutes);
 router.use("/live-chat", liveChatRoutes)
 
 
-router.post("/single", uploadWithMulter.single("file"), (req, res) => {
-  res.status(201).json({ url: req.filelink });
+router.post("/upload/single", uploadWithMulter.single("file"), (req, res) => {
+  // Make sure req.filelink exists
+  if (!req.filelink) {
+    return res.status(400).json({ message: "File upload failed" });
+  }
+  
+  res.status(201).json({ 
+    message: "File uploaded successfully",
+    data: { 
+      url: req.filelink,
+      filename: req.file.filename 
+    }
+  });
 });
 
+// Optional: Add employee-specific photo upload
+router.post("/upload/employee-photo", uploadWithMulter.single("photo"), (req, res) => {
+  if (!req.filelink) {
+    return res.status(400).json({ message: "Photo upload failed" });
+  }
+  
+  res.status(201).json({
+    message: "Employee photo uploaded successfully",
+    data: {
+      photoUrl: req.filelink,
+      filename: req.file.filename
+    }
+  });
+});
 
 
 
