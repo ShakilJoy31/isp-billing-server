@@ -16,7 +16,7 @@ router.get("/get-client-according-to-id/:id", getClientById);
 
 
 
-router.post("/login", checkUserCredentials);
+router.post("/login", checkUserCredentials); 
 
 
 
