@@ -1,174 +1,210 @@
+const { Op } = require("sequelize");
 const City = require("../../models/area/area");
 
-const createArea = async (req, res, next) => {
+const createCity = async (req, res, next) => {
   try {
     const { cityName, cityDetails, status } = req.body;
 
-    // Check if the area already exists based on cityName
-    const existingArea = await City.findOne({ where: { cityName } });
-    if (existingArea) {
+    // Check if the city already exists
+    const existingCity = await City.findOne({ where: { cityName } });
+    if (existingCity) {
       return res.status(409).json({
-        message: "This area already exists! Try a different name.",
+        message: "This city already exists! Try a different name.",
       });
     }
 
-    // Create a new area entry
-    const newArea = await City.create({
+    // Create a new city
+    const newCity = await City.create({
       cityName,
       cityDetails,
-      status,
+      status: status || "Active",
     });
 
     return res.status(201).json({
-      message: "Area created successfully!",
-      data: newArea,
+      message: "City created successfully!",
+      data: newCity,
     });
   } catch (error) {
     next(error);
   }
 };
 
-const getAllAreas = async (req, res, next) => {
-    try {
-      // Extract pagination parameters from the query string
-      const page = parseInt(req.query.page) || 1; // Default to page 1 if not provided
-      const limit = parseInt(req.query.limit) || 10; // Default to 10 items per page if not provided
-      const offset = (page - 1) * limit; // Calculate the offset
-  
-      // Fetch paginated areas from the database
-      const { count, rows: areas } = await City.findAndCountAll({
-        limit, // Number of records to fetch
-        offset, // Starting point for fetching records
+const getAllCities = async (req, res, next) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+
+    // Extract filters
+    const { search, status } = req.query;
+    let whereCondition = {};
+
+    // Add search filter
+    if (search) {
+      whereCondition = {
+        ...whereCondition,
+        [Op.or]: [
+          { cityName: { [Op.like]: `%${search}%` } },
+          { cityDetails: { [Op.like]: `%${search}%` } },
+        ],
+      };
+    }
+
+    // Add status filter
+    if (status) {
+      whereCondition.status = status;
+    }
+
+    // Fetch paginated cities
+    const { count, rows: cities } = await City.findAndCountAll({
+      where: whereCondition,
+      limit,
+      offset,
+      order: [['createdAt', 'DESC']],
+    });
+
+    if (!cities || cities.length === 0) {
+      return res.status(404).json({
+        message: "No cities found in the database.",
       });
-  
-      // If no areas are found, return a 404 response
-      if (!areas || areas.length === 0) {
-        return res.status(404).json({
-          message: "No areas found in the database.",
+    }
+
+    const totalPages = Math.ceil(count / limit);
+
+    return res.status(200).json({
+      message: "Cities retrieved successfully!",
+      data: cities,
+      pagination: {
+        currentPage: page,
+        totalPages: totalPages,
+        totalItems: count,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const updateCity = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { cityName, cityDetails, status } = req.body;
+
+    // Find the city by ID
+    const cityToUpdate = await City.findOne({ where: { id } });
+
+    if (!cityToUpdate) {
+      return res.status(404).json({
+        message: "City not found!",
+      });
+    }
+
+    // Check if the new cityName already exists (if it's being updated)
+    if (cityName && cityName !== cityToUpdate.cityName) {
+      const existingCity = await City.findOne({ where: { cityName } });
+      if (existingCity) {
+        return res.status(409).json({
+          message: "A city with this name already exists! Try a different name.",
         });
       }
-  
-      // Calculate total pages
-      const totalPages = Math.ceil(count / limit);
-  
-      // Return the paginated list of areas
-      return res.status(200).json({
-        message: "Areas retrieved successfully!",
-        data: areas,
-        pagination: {
-          currentPage: page,
-          totalPages: totalPages,
-          totalItems: count,
-        },
-      });
-    } catch (error) {
-      next(error);
     }
-  };
 
+    // Update the city fields
+    if (cityName) cityToUpdate.cityName = cityName;
+    if (cityDetails !== undefined) cityToUpdate.cityDetails = cityDetails;
+    if (status) cityToUpdate.status = status;
 
-  const updateArea = async (req, res, next) => {
-    try {
-      const { id } = req.params; // Extract the area ID from the request parameters
-      const { cityName, cityDetails, status } = req.body; // Extract updated fields from the request body
-  
-      // Find the area by ID
-      const areaToUpdate = await City.findOne({ where: { id } });
-  
-      // If the area doesn't exist, return a 404 response
-      if (!areaToUpdate) {
-        return res.status(404).json({
-          message: "Area not found!",
-        });
-      }
-  
-      // Check if the new cityName already exists (if it's being updated)
-      if (cityName && cityName !== areaToUpdate.cityName) {
-        const existingArea = await City.findOne({ where: { cityName } });
-        if (existingArea) {
-          return res.status(409).json({
-            message: "An area with this name already exists! Try a different name.",
-          });
-        }
-      }
-  
-      // Update the area fields
-      if (cityName) areaToUpdate.cityName = cityName;
-      if (cityDetails) areaToUpdate.cityDetails = cityDetails;
-      if (status) areaToUpdate.status = status;
-  
-      // Save the updated area
-      await areaToUpdate.save();
-  
-      return res.status(200).json({
-        message: "Area updated successfully!",
-        data: areaToUpdate,
+    // Save the updated city
+    await cityToUpdate.save();
+
+    return res.status(200).json({
+      message: "City updated successfully!",
+      data: cityToUpdate,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const deleteCity = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    // Find the city by ID
+    const cityToDelete = await City.findOne({ where: { id } });
+
+    if (!cityToDelete) {
+      return res.status(404).json({
+        message: "City not found!",
       });
-    } catch (error) {
-      next(error);
     }
-  };
 
-  const deleteArea = async (req, res, next) => {
-    try {
-      const { id } = req.params; // Extract the area ID from the request parameters
-  
-      // Find the area by ID
-      const areaToDelete = await City.findOne({ where: { id } });
-  
-      // If the area doesn't exist, return a 404 response
-      if (!areaToDelete) {
-        return res.status(404).json({
-          message: "Area not found!",
-        });
-      }
-  
-      // Delete the area
-      await areaToDelete.destroy();
-  
-      return res.status(200).json({
-        message: "Area deleted successfully!",
+    // Delete the city
+    await cityToDelete.destroy();
+
+    return res.status(200).json({
+      message: "City deleted successfully!",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getCityNames = async (req, res, next) => {
+  try {
+    const cities = await City.findAll({
+      attributes: ['cityName'],
+      where: { status: 'Active' },
+      group: ['cityName'],
+      order: [['cityName', 'ASC']],
+    });
+
+    const cityNames = cities.map(city => city.cityName);
+
+    if (!cityNames || cityNames.length === 0) {
+      return res.status(404).json({
+        message: "No city names found in the database.",
       });
-    } catch (error) {
-      next(error);
     }
-  };
 
+    return res.status(200).json({
+      message: "City names retrieved successfully!",
+      data: cityNames,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
-  // Getting only cities name
-  const getCityNames = async (req, res, next) => {
-    try {
-      // Fetch all areas from the database
-      const areas = await City.findAll({
-        attributes: ['cityName'], // Only fetch the cityName field
-        group: ['cityName'], // Group by cityName to avoid duplicates
-      });
-  
-      // Extract city names from the result
-      const cityNames = areas.map(area => area.cityName);
-  
-      // If no city names are found, return a 404 response
-      if (!cityNames || cityNames.length === 0) {
-        return res.status(404).json({
-          message: "No city names found in the database.",
-        });
-      }
-  
-      // Return the list of city names
-      return res.status(200).json({
-        message: "City names retrieved successfully!",
-        data: cityNames,
-      });
-    } catch (error) {
-      next(error);
-    }
-  };
+const getCityStats = async (req, res, next) => {
+  try {
+    // Get total cities count
+    const totalCities = await City.count();
+    
+    // Get active cities count
+    const activeCities = await City.count({ where: { status: 'Active' } });
+    
+    // Get inactive cities count
+    const inactiveCities = await City.count({ where: { status: 'Inactive' } });
 
+    return res.status(200).json({
+      message: "City statistics retrieved successfully!",
+      data: {
+        totalCities,
+        activeCities,
+        inactiveCities,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
-  module.exports = {
-    createArea,
-    getAllAreas,
-    deleteArea,
-    updateArea,
-    getCityNames
-  };
+module.exports = {
+  createCity,
+  getAllCities,
+  deleteCity,
+  updateCity,
+  getCityNames,
+  getCityStats
+};

@@ -11,22 +11,22 @@ const Zone = sequelize.define("Zone", {
   zoneName: {
     type: dt.STRING,
     allowNull: false,
-    unique: true, // Ensure zone names are unique
+    unique: true,
   },
   city: {
     type: dt.STRING,
-    allowNull: false, // Zone must belong to a city
+    allowNull: false,
   },
   zoneDetails: {
     type: dt.TEXT,
-    allowNull: true, // Optional field
+    allowNull: true,
   },
   status: {
     type: dt.STRING,
     allowNull: false,
-    defaultValue: "Active", // Default value
+    defaultValue: "Active",
   },
-},{
+}, {
   tableName: 'zones',
   timestamps: true,
 });

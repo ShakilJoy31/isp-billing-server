@@ -11,18 +11,28 @@ const City = sequelize.define("City", {
   cityName: {
     type: dt.STRING,
     allowNull: false,
-    unique: true, // Ensure area names are unique
+    unique: true,
   },
   cityDetails: {
     type: dt.TEXT,
-    allowNull: true, // Optional field
+    allowNull: true,
   },
   status: {
     type: dt.STRING,
     allowNull: false,
-    defaultValue: "Active", // Default value
+    defaultValue: "Active",
   },
-},{
+  createdAt: {
+    type: dt.DATE,
+    allowNull: false,
+    defaultValue: dt.NOW,
+  },
+  updatedAt: {
+    type: dt.DATE,
+    allowNull: false,
+    defaultValue: dt.NOW,
+  },
+}, {
   tableName: 'cities',
   timestamps: true,
 });
