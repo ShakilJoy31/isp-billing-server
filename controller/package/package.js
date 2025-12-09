@@ -1,3 +1,4 @@
+const { Op } = require("sequelize");
 const sequelize = require("../../database/connection");
 const ClientInformation = require("../../models/Authentication/client.model");
 const Package = require("../../models/package/package.model");

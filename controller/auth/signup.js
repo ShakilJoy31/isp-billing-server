@@ -33,33 +33,9 @@ const createClient = async (req, res, next) => {
       password,
     } = req.body;
 
-    // Check if email already exists
-    const existingEmail = await ClientInformation.findOne({ where: { email } });
-    if (existingEmail) {
-      return res.status(409).json({
-        message: "This email already exists!",
-      });
-    }
-
-    // Check if NID already exists
-    const existingNid = await ClientInformation.findOne({ where: { nidOrPassportNo } });
-    if (existingNid) {
-      return res.status(409).json({
-        message: "This NID/Passport number already exists!",
-      });
-    }
-
-    // Check if mobile number already exists
-    const existingMobile = await ClientInformation.findOne({ where: { mobileNo } });
-    if (existingMobile) {
-      return res.status(409).json({
-        message: "This mobile number already exists!",
-      });
-    }
-
     // Generate unique IDs
     const customerId = await generateUniqueUserId(fullName);
-    const userId = `${customerType.toLowerCase()}_${customerId}`;
+    const userId = customerId;
 
     // Create new client
     const newClient = await ClientInformation.create({
