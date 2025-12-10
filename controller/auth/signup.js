@@ -31,6 +31,8 @@ const createClient = async (req, res, next) => {
       referId,
       photo,
       password,
+      status,
+      role,
     } = req.body;
 
     // Generate unique IDs
@@ -64,8 +66,8 @@ const createClient = async (req, res, next) => {
       landmark,
       connectionDetails: connectionDetails || null,
       referId: referId || null,
-      role: "client",
-      status: "pending",
+      role: role,
+      status: status,
       password: password || mobileNo,
     });
 
@@ -743,7 +745,8 @@ const updateEmployee = async (req, res, next) => {
       role,
       sex,
       baseSalary,
-      status
+      status,
+      password
     } = req.body;
 
     // Check if the employee exists
@@ -789,6 +792,7 @@ const updateEmployee = async (req, res, next) => {
       baseSalary: parseFloat(baseSalary) || existingEmployee.baseSalary,
       status: status || existingEmployee.status,
       photo: photo || existingEmployee.photo,
+      password: password || existingEmployee.password,
     };
 
     // Update the employee
@@ -1040,6 +1044,52 @@ const checkUserCredentials = async (req, res, next) => {
 
 
 
+const checkEmployeeCredentials = async (req, res, next) => {
+  try {
+    const { userId, password } = req.body;
+
+    // Check if userId and password are provided
+    if (!userId || !password) {
+      return res.status(400).json({
+        message: "Both userId and password are required.",
+      });
+    }
+
+    // Find the user by userId in ClientInformation table
+    let user = await ClientInformation.findOne({ where: { userId } });
+
+    // If user is not found in ClientInformation, search in AuthorityInformation
+    if (!user) {
+      user = await AuthorityInformation.findOne({ where: { userId } });
+
+      // If user is not found in AuthorityInformation either
+      if (!user) {
+        return res.status(404).json({
+          message: "User not found. Please check your userId.",
+        });
+      }
+    }
+
+    // Check if the password matches
+    if (user.password !== password) {
+      return res.status(401).json({
+        message: "Incorrect password. Please try again.",
+      });
+    }
+
+    // If everything is correct, return success
+    return res.status(200).json({
+      message: "Login successful!",
+      data: user,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+
+
 module.exports = {
   createAuthority,
   deleteEmployee,
@@ -1062,5 +1112,6 @@ module.exports = {
 
 
   checkUserCredentials,
+  checkEmployeeCredentials
 
 };
