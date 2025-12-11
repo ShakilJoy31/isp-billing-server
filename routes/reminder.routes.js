@@ -18,8 +18,6 @@ router.get('/user-warning', getUserWarningStatus);
 router.post("/send-reminder/:id", sendReminder);
 router.post("/cancel-reminder/:id", cancelReminder);
 
-
-
 router.get("/reminder-stats", getReminderStats);
 
 module.exports = reminderRoutes = router;
