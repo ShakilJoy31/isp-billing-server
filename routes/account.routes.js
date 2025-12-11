@@ -3,7 +3,7 @@ const { createBankAccount, getAllBankAccounts, getBankAccountById, updateBankAcc
 
 const router = express.Router();
 
-// Bank Account routes
+//! Bank Account routes
 router.post("/create-account", createBankAccount);
 router.get("/get-all-accounts", getAllBankAccounts);
 router.get("/get-account/:id", getBankAccountById);

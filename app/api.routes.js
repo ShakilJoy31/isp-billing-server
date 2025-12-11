@@ -11,6 +11,7 @@ const liveChatRoutes = require("../routes/liveChat.routes");
 const publicContactRouter = require("../routes/public-contact.routes");
 const bankRoutes = require("../routes/account.routes");
 const uploadWithMulter = require("../middleware/uploadWithMulter");
+const expenseRoutes = require("../routes/expense.routes");
 
 const router = require("express").Router();
 
@@ -33,6 +34,8 @@ router.use("/benefit", benefitRoutes);
 router.use("/reminder", reminderRoutes);
 
 router.use("/accounts", bankRoutes);
+
+router.use("/expense", expenseRoutes);
 
 router.use("/live-chat", liveChatRoutes);
 
