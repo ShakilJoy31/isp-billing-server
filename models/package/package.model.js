@@ -1,5 +1,6 @@
 const { DataTypes: dt } = require("sequelize");
 const sequelize = require("../../database/connection");
+const ClientInformation = require("../Authentication/client.model");
 
 const Package = sequelize.define("Package", {
   id: {
@@ -85,5 +86,6 @@ const Package = sequelize.define("Package", {
     }
   }
 });
+
 
 module.exports = Package;

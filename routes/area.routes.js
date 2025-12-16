@@ -1,5 +1,5 @@
 const express = require("express");
-const { createPackage, getAllPackages, deletePackage, updatePackage } = require("../controller/package/package");
+const { createPackage, getAllPackages, deletePackage, updatePackage } = require("../controller/package/package.controller");
 const { getCityNames, createCity, getAllCities, deleteCity, updateCity, getCityStats } = require("../controller/area/area");
 const { createZone, getAllZones, deleteZone, updateZone, getZoneStats, getZoneById } = require("../controller/area/zone");
 

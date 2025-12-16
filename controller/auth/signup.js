@@ -2,8 +2,47 @@ const { Op } = require("sequelize");
 const AuthorityInformation = require("../../models/Authentication/authority.model");
 const ClientInformation = require("../../models/Authentication/client.model");
 const generateUniqueUserId = require("../../utils/helper/generateUniqueId");
+const Package = require("../../models/package/package.model");
+const sequelize = require("../../database/connection");
 
-// Create new client
+// Helper function to get package details
+const getPackageDetails = async (packageId) => {
+  try {
+    const package = await Package.findOne({
+      where: { id: packageId },
+      attributes: [
+        "id",
+        "packageName",
+        "packageBandwidth",
+        "packagePrice",
+        "packageDetails",
+        "duration",
+        "status",
+      ],
+    });
+    return package ? package.toJSON() : null;
+  } catch (error) {
+    console.error("Error fetching package details:", error);
+    return null;
+  }
+};
+
+// Helper function to transform client with package details
+const transformClientWithPackage = async (client) => {
+  const clientData = client.toJSON ? client.toJSON() : client;
+
+  // Get package details
+  const packageDetails = await getPackageDetails(clientData.package);
+
+  if (packageDetails) {
+    clientData.package = packageDetails.packageName; // Replace ID with name
+    clientData.packageDetails = packageDetails; // Add full package details
+  }
+
+  return clientData;
+};
+
+//! Create new client
 const createClient = async (req, res, next) => {
   try {
     const {
@@ -20,7 +59,7 @@ const createClient = async (req, res, next) => {
       mobileNo,
       email,
       customerType,
-      package,
+      package, // This should be package ID
       location,
       area,
       flatAptNo,
@@ -28,6 +67,7 @@ const createClient = async (req, res, next) => {
       roadNo,
       landmark,
       connectionDetails,
+      costForPackage,
       referId,
       photo,
       password,
@@ -57,7 +97,7 @@ const createClient = async (req, res, next) => {
       mobileNo,
       email,
       customerType,
-      package,
+      package, // Store the package ID
       location,
       area,
       flatAptNo,
@@ -65,22 +105,118 @@ const createClient = async (req, res, next) => {
       roadNo,
       landmark,
       connectionDetails: connectionDetails || null,
+      costForPackage,
       referId: referId || null,
       role: role,
       status: status,
       password: password || mobileNo,
     });
 
+    // Transform response with package details
+    const clientData = await transformClientWithPackage(newClient);
+
     return res.status(201).json({
       message: "Client created successfully!",
-      data: newClient,
+      data: clientData,
     });
   } catch (error) {
     next(error);
   }
 };
 
-// Update client
+//! Get all clients with pagination and filtering
+const getAllClients = async (req, res, next) => {
+  try {
+    const {
+      page = 1,
+      limit = 10,
+      search = "",
+      status = "",
+      customerType = "",
+      location = "",
+      package = "",
+    } = req.query;
+
+    const pageNumber = parseInt(page, 10);
+    const limitNumber = parseInt(limit, 10);
+    const offset = (pageNumber - 1) * limitNumber;
+
+    // Build where clause
+    const whereClause = {};
+
+    if (search) {
+      whereClause[Op.or] = [
+        { fullName: { [Op.like]: `%${search}%` } },
+        { customerId: { [Op.like]: `%${search}%` } },
+        { userId: { [Op.like]: `%${search}%` } },
+        { mobileNo: { [Op.like]: `%${search}%` } },
+        { email: { [Op.like]: `%${search}%` } },
+      ];
+    }
+
+    if (status) whereClause.status = status;
+    if (customerType) whereClause.customerType = customerType;
+    if (location) whereClause.location = location;
+    if (package) whereClause.package = package;
+
+    const { count, rows: clients } = await ClientInformation.findAndCountAll({
+      where: whereClause,
+      limit: limitNumber,
+      offset: offset,
+      order: [["createdAt", "DESC"]],
+      attributes: { exclude: ["password"] },
+    });
+
+    // Transform each client with package details
+    const transformedClients = await Promise.all(
+      clients.map((client) => transformClientWithPackage(client))
+    );
+
+    const totalPages = Math.ceil(count / limitNumber);
+
+    return res.status(200).json({
+      message: "Clients retrieved successfully!",
+      data: transformedClients,
+      pagination: {
+        totalItems: count,
+        totalPages: totalPages,
+        currentPage: pageNumber,
+        itemsPerPage: limitNumber,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+//! Get client by ID
+const getClientById = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const client = await ClientInformation.findOne({
+      where: { id },
+      attributes: { exclude: ["password"] },
+    });
+
+    if (!client) {
+      return res.status(404).json({
+        message: "Client not found!",
+      });
+    }
+
+    // Transform response
+    const clientData = await transformClientWithPackage(client);
+
+    return res.status(200).json({
+      message: "Client retrieved successfully!",
+      data: clientData,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+//! Update client
 const updateClient = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -98,7 +234,7 @@ const updateClient = async (req, res, next) => {
       mobileNo,
       email,
       customerType,
-      package,
+      package, // This should be package ID
       location,
       area,
       flatAptNo,
@@ -106,6 +242,7 @@ const updateClient = async (req, res, next) => {
       roadNo,
       landmark,
       connectionDetails,
+      costForPackage,
       referId,
       photo,
       status,
@@ -132,7 +269,9 @@ const updateClient = async (req, res, next) => {
 
     // Check if new NID already exists (if changed)
     if (nidOrPassportNo && nidOrPassportNo !== existingClient.nidOrPassportNo) {
-      const nidExists = await ClientInformation.findOne({ where: { nidOrPassportNo } });
+      const nidExists = await ClientInformation.findOne({
+        where: { nidOrPassportNo },
+      });
       if (nidExists) {
         return res.status(409).json({
           message: "This NID/Passport number already exists!",
@@ -142,7 +281,9 @@ const updateClient = async (req, res, next) => {
 
     // Check if new mobile already exists (if changed)
     if (mobileNo && mobileNo !== existingClient.mobileNo) {
-      const mobileExists = await ClientInformation.findOne({ where: { mobileNo } });
+      const mobileExists = await ClientInformation.findOne({
+        where: { mobileNo },
+      });
       if (mobileExists) {
         return res.status(409).json({
           message: "This mobile number already exists!",
@@ -165,7 +306,7 @@ const updateClient = async (req, res, next) => {
       mobileNo,
       email,
       customerType,
-      package,
+      package, // Store the package ID
       location,
       area,
       flatAptNo,
@@ -173,6 +314,7 @@ const updateClient = async (req, res, next) => {
       roadNo,
       landmark,
       connectionDetails,
+      costForPackage,
       referId,
       photo,
       status,
@@ -187,45 +329,25 @@ const updateClient = async (req, res, next) => {
       where: { id },
     });
 
+    // Fetch updated client
     const updatedClient = await ClientInformation.findOne({
       where: { id },
       attributes: { exclude: ["password"] },
     });
 
+    // Transform response
+    const clientData = await transformClientWithPackage(updatedClient);
+
     return res.status(200).json({
       message: "Client updated successfully!",
-      data: updatedClient,
+      data: clientData,
     });
   } catch (error) {
     next(error);
   }
 };
 
-// Get client by ID
-const getClientById = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const client = await ClientInformation.findOne({
-      where: { id },
-      attributes: { exclude: ["password"] },
-    });
-
-    if (!client) {
-      return res.status(404).json({
-        message: "Client not found!",
-      });
-    }
-
-    return res.status(200).json({
-      message: "Client retrieved successfully!",
-      data: client,
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// Delete client
+//! Delete client
 const deleteClient = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -247,67 +369,7 @@ const deleteClient = async (req, res, next) => {
   }
 };
 
-// Get all clients with pagination and filtering
-const getAllClients = async (req, res, next) => {
-  try {
-    const { 
-      page = 1, 
-      limit = 10,
-      search = "",
-      status = "",
-      customerType = "",
-      location = "",
-      package = ""
-    } = req.query;
-
-    const pageNumber = parseInt(page, 10);
-    const limitNumber = parseInt(limit, 10);
-    const offset = (pageNumber - 1) * limitNumber;
-
-    // Build where clause
-    const whereClause = {};
-    
-    if (search) {
-      whereClause[Op.or] = [
-        { fullName: { [Op.like]: `%${search}%` } },
-        { customerId: { [Op.like]: `%${search}%` } },
-        { userId: { [Op.like]: `%${search}%` } },
-        { mobileNo: { [Op.like]: `%${search}%` } },
-        { email: { [Op.like]: `%${search}%` } },
-      ];
-    }
-    
-    if (status) whereClause.status = status;
-    if (customerType) whereClause.customerType = customerType;
-    if (location) whereClause.location = location;
-    if (package) whereClause.package = package;
-
-    const { count, rows: clients } = await ClientInformation.findAndCountAll({
-      where: whereClause,
-      limit: limitNumber,
-      offset: offset,
-      order: [['createdAt', 'DESC']],
-      attributes: { exclude: ["password"] },
-    });
-
-    const totalPages = Math.ceil(count / limitNumber);
-
-    return res.status(200).json({
-      message: "Clients retrieved successfully!",
-      data: clients,
-      pagination: {
-        totalItems: count,
-        totalPages: totalPages,
-        currentPage: pageNumber,
-        itemsPerPage: limitNumber,
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// Get clients by refer ID
+//! Get clients by refer ID
 const getClientsByReferCode = async (req, res, next) => {
   try {
     const { referId } = req.params;
@@ -321,7 +383,7 @@ const getClientsByReferCode = async (req, res, next) => {
       where: { referId },
       limit: limitNumber,
       offset: offset,
-      order: [['createdAt', 'DESC']],
+      order: [["createdAt", "DESC"]],
       attributes: { exclude: ["password"] },
     });
 
@@ -331,11 +393,16 @@ const getClientsByReferCode = async (req, res, next) => {
       });
     }
 
+    // Transform response
+    const transformedClients = await Promise.all(
+      clients.map((client) => transformClientWithPackage(client))
+    );
+
     const totalPages = Math.ceil(count / limitNumber);
 
     return res.status(200).json({
       message: "Clients retrieved successfully!",
-      data: clients,
+      data: transformedClients,
       pagination: {
         totalItems: count,
         totalPages: totalPages,
@@ -348,59 +415,7 @@ const getClientsByReferCode = async (req, res, next) => {
   }
 };
 
-// Get client statistics
-const getClientStats = async (req, res, next) => {
-  try {
-    const totalClients = await ClientInformation.count();
-    const activeClients = await ClientInformation.count({ where: { status: 'active' } });
-    const pendingClients = await ClientInformation.count({ where: { status: 'pending' } });
-    const inactiveClients = await ClientInformation.count({ where: { status: 'inactive' } });
-
-    // Count by customer type
-    const customerTypes = await ClientInformation.findAll({
-      attributes: [
-        'customerType',
-        [sequelize.fn('COUNT', sequelize.col('customerType')), 'count']
-      ],
-      group: ['customerType']
-    });
-
-    // Count by package
-    const packages = await ClientInformation.findAll({
-      attributes: [
-        'package',
-        [sequelize.fn('COUNT', sequelize.col('package')), 'count']
-      ],
-      group: ['package']
-    });
-
-    // Count by location
-    const locations = await ClientInformation.findAll({
-      attributes: [
-        'location',
-        [sequelize.fn('COUNT', sequelize.col('location')), 'count']
-      ],
-      group: ['location']
-    });
-
-    return res.status(200).json({
-      message: "Client statistics retrieved successfully!",
-      data: {
-        totalClients,
-        activeClients,
-        pendingClients,
-        inactiveClients,
-        customerTypes,
-        packages,
-        locations,
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// Update client status (approve/reject)
+//! Update client status (approve/reject)
 const updateClientStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -415,19 +430,167 @@ const updateClientStatus = async (req, res, next) => {
 
     await ClientInformation.update({ status }, { where: { id } });
 
+    // Fetch updated client
     const updatedClient = await ClientInformation.findOne({
       where: { id },
       attributes: { exclude: ["password"] },
     });
 
+    // Transform response
+    const clientData = await transformClientWithPackage(updatedClient);
+
     return res.status(200).json({
       message: `Client ${status} successfully!`,
-      data: updatedClient,
+      data: clientData,
     });
   } catch (error) {
     next(error);
   }
 };
+
+//! Get client statistics
+const getClientStats = async (req, res, next) => {
+  try {
+    const totalClients = await ClientInformation.count();
+    const activeClients = await ClientInformation.count({
+      where: { status: "active" },
+    });
+    const pendingClients = await ClientInformation.count({
+      where: { status: "pending" },
+    });
+    const inactiveClients = await ClientInformation.count({
+      where: { status: "inactive" },
+    });
+
+    // Count by customer type
+    const customerTypes = await ClientInformation.findAll({
+      attributes: [
+        "customerType",
+        [sequelize.fn("COUNT", sequelize.col("customerType")), "count"],
+      ],
+      group: ["customerType"],
+    });
+
+    // Count by package
+    const packageCounts = await ClientInformation.findAll({
+      attributes: [
+        "package",
+        [sequelize.fn("COUNT", sequelize.col("package")), "count"],
+      ],
+      group: ["package"],
+      raw: true,
+    });
+
+    // Get package details for each package ID
+    const packagesWithDetails = await Promise.all(
+      packageCounts.map(async (pkg) => {
+        const packageDetails = await Package.findOne({
+          where: { id: pkg.package },
+          attributes: ["packageName", "packageBandwidth", "packagePrice"],
+        });
+
+        return {
+          packageId: pkg.package,
+          packageName: packageDetails ? packageDetails.packageName : "Unknown",
+          packageBandwidth: packageDetails
+            ? packageDetails.packageBandwidth
+            : null,
+          packagePrice: packageDetails ? packageDetails.packagePrice : null,
+          count: pkg.count,
+        };
+      })
+    );
+
+    // Count by location
+    const locations = await ClientInformation.findAll({
+      attributes: [
+        "location",
+        [sequelize.fn("COUNT", sequelize.col("location")), "count"],
+      ],
+      group: ["location"],
+    });
+
+    return res.status(200).json({
+      message: "Client statistics retrieved successfully!",
+      data: {
+        totalClients,
+        activeClients,
+        pendingClients,
+        inactiveClients,
+        customerTypes,
+        packages: packagesWithDetails,
+        locations,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -451,33 +614,31 @@ const updateClientStatus = async (req, res, next) => {
 //! Helper function to generate unique employee ID
 const generateUniqueEmployeeId = async (fullName) => {
   try {
-    // Extract initials from full name
-    const initials = fullName
-      .split(' ')
-      .map(name => name.charAt(0).toUpperCase())
-      .join('');
-
-    // Generate a random 4-digit number
+    // Extract first name (first word from full name)
+    const firstName = fullName.trim().split(" ")[0].toLowerCase();
+    
+    // Generate a 4-digit random number
     const randomNum = Math.floor(1000 + Math.random() * 9000);
-    let userId = `${initials}${randomNum}`;
+    let userId = `${firstName}${randomNum}@ringtel`;
 
     // Check if userId already exists
     let existingEmployee = await AuthorityInformation.findOne({
-      where: { userId }
+      where: { userId },
     });
 
-    // If exists, generate new one
+    // If exists, generate new one with different random number
     let counter = 1;
     while (existingEmployee) {
       const newRandomNum = Math.floor(1000 + Math.random() * 9000);
-      userId = `${initials}${newRandomNum}`;
+      userId = `${firstName}${newRandomNum}@ringtel`;
       existingEmployee = await AuthorityInformation.findOne({
-        where: { userId }
+        where: { userId },
       });
       counter++;
       if (counter > 10) {
-        // Fallback: use timestamp
-        userId = `${initials}${Date.now().toString().slice(-4)}`;
+        // Fallback: use timestamp last 4 digits
+        const timestamp = Date.now().toString().slice(-4);
+        userId = `${firstName}${timestamp}@ringtel`;
         break;
       }
     }
@@ -485,8 +646,9 @@ const generateUniqueEmployeeId = async (fullName) => {
     return userId;
   } catch (error) {
     console.error("Error generating employee ID:", error);
-    // Fallback ID
-    return `EMP${Date.now().toString().slice(-6)}`;
+    // Fallback ID using timestamp
+    const timestamp = Date.now().toString().slice(-6);
+    return `employee${timestamp}@ringtel`;
   }
 };
 
@@ -511,13 +673,14 @@ const createAuthority = async (req, res, next) => {
       role,
       sex,
       baseSalary,
-      status = 'active' // Default to active from frontend
+      status = "active", // Default to active from frontend
     } = req.body;
 
     // Validate required fields
     if (!fullName || !email || !mobileNo || !role || !dateOfBirth) {
       return res.status(400).json({
-        message: "Full name, email, mobile number, role, and date of birth are required!",
+        message:
+          "Full name, email, mobile number, role, and date of birth are required!",
       });
     }
 
@@ -538,24 +701,24 @@ const createAuthority = async (req, res, next) => {
     const newEntry = await AuthorityInformation.create({
       address,
       age: parseInt(age) || 0,
-      bloodGroup: bloodGroup || '',
+      bloodGroup: bloodGroup || "",
       dateOfBirth,
       email,
       photo,
       fatherOrSpouseName,
       fullName,
-      jobCategory: jobCategory || '',
-      jobType: jobType || 'Full Time',
+      jobCategory: jobCategory || "",
+      jobType: jobType || "Full Time",
       maritalStatus,
       mobileNo,
       nidOrPassportNo,
-      religion: religion || '',
+      religion: religion || "",
       role,
       sex,
-      baseSalary: parseFloat(baseSalary) || 0.00,
+      baseSalary: parseFloat(baseSalary) || 0.0,
       userId,
       password: mobileNo, // Default password is mobile number
-      status: status || 'active',
+      status: status || "active",
     });
 
     return res.status(201).json({
@@ -571,13 +734,13 @@ const createAuthority = async (req, res, next) => {
 //! Get All Employees with Filters
 const getAllAuthorities = async (req, res, next) => {
   try {
-    const { 
-      page = 1, 
+    const {
+      page = 1,
       limit = 10,
-      search = '',
-      role = '',
-      status = '',
-      jobType = ''
+      search = "",
+      role = "",
+      status = "",
+      jobType = "",
     } = req.query;
 
     // Convert page and limit to numbers
@@ -589,7 +752,7 @@ const getAllAuthorities = async (req, res, next) => {
 
     // Build where conditions for filters
     const whereConditions = {};
-    
+
     // Search filter
     if (search) {
       whereConditions[Op.or] = [
@@ -599,29 +762,30 @@ const getAllAuthorities = async (req, res, next) => {
         { userId: { [Op.like]: `%${search}%` } },
       ];
     }
-    
+
     // Role filter
     if (role) {
       whereConditions.role = role;
     }
-    
+
     // Status filter
     if (status) {
       whereConditions.status = status;
     }
-    
+
     // Job Type filter
     if (jobType) {
       whereConditions.jobType = jobType;
     }
 
     // Fetch all employees with pagination and filters
-    const { count, rows: employees } = await AuthorityInformation.findAndCountAll({
-      where: whereConditions,
-      limit: limitNumber,
-      offset: offset,
-      order: [['createdAt', 'DESC']],
-    });
+    const { count, rows: employees } =
+      await AuthorityInformation.findAndCountAll({
+        where: whereConditions,
+        limit: limitNumber,
+        offset: offset,
+        order: [["createdAt", "DESC"]],
+      });
 
     // Calculate total pages
     const totalPages = Math.ceil(count / limitNumber);
@@ -646,39 +810,39 @@ const getEmployeeStats = async (req, res, next) => {
   try {
     // Get total employees count
     const totalEmployees = await AuthorityInformation.count();
-    
+
     // Get active employees count
     const activeEmployees = await AuthorityInformation.count({
-      where: { status: 'active' }
+      where: { status: "active" },
     });
-    
+
     // Get role breakdown
     const roleBreakdown = await AuthorityInformation.findAll({
       attributes: [
-        'role',
-        [sequelize.fn('COUNT', sequelize.col('id')), 'count']
+        "role",
+        [sequelize.fn("COUNT", sequelize.col("id")), "count"],
       ],
-      group: ['role'],
+      group: ["role"],
       raw: true,
     });
-    
+
     // Get status breakdown
     const statusBreakdown = await AuthorityInformation.findAll({
       attributes: [
-        'status',
-        [sequelize.fn('COUNT', sequelize.col('id')), 'count']
+        "status",
+        [sequelize.fn("COUNT", sequelize.col("id")), "count"],
       ],
-      group: ['status'],
+      group: ["status"],
       raw: true,
     });
-    
+
     // Get job type breakdown
     const jobTypeBreakdown = await AuthorityInformation.findAll({
       attributes: [
-        'jobType',
-        [sequelize.fn('COUNT', sequelize.col('id')), 'count']
+        "jobType",
+        [sequelize.fn("COUNT", sequelize.col("id")), "count"],
       ],
-      group: ['jobType'],
+      group: ["jobType"],
       raw: true,
     });
 
@@ -704,10 +868,10 @@ const getEmployeeById = async (req, res, next) => {
     const { id } = req.params;
 
     // Check if the employee exists
-    const employee = await AuthorityInformation.findOne({ 
-      where: { id } 
+    const employee = await AuthorityInformation.findOne({
+      where: { id },
     });
-    
+
     if (!employee) {
       return res.status(404).json({
         message: "Employee not found!",
@@ -746,14 +910,14 @@ const updateEmployee = async (req, res, next) => {
       sex,
       baseSalary,
       status,
-      password
+      password,
     } = req.body;
 
     // Check if the employee exists
     const existingEmployee = await AuthorityInformation.findOne({
       where: { id },
     });
-    
+
     if (!existingEmployee) {
       return res.status(404).json({
         message: "Employee not found!",
@@ -779,7 +943,8 @@ const updateEmployee = async (req, res, next) => {
       bloodGroup: bloodGroup || existingEmployee.bloodGroup,
       dateOfBirth: dateOfBirth || existingEmployee.dateOfBirth,
       email: email || existingEmployee.email,
-      fatherOrSpouseName: fatherOrSpouseName || existingEmployee.fatherOrSpouseName,
+      fatherOrSpouseName:
+        fatherOrSpouseName || existingEmployee.fatherOrSpouseName,
       fullName: fullName || existingEmployee.fullName,
       jobCategory: jobCategory || existingEmployee.jobCategory,
       jobType: jobType || existingEmployee.jobType,
@@ -801,8 +966,8 @@ const updateEmployee = async (req, res, next) => {
     });
 
     // Fetch the updated employee data
-    const updatedEmployee = await AuthorityInformation.findOne({ 
-      where: { id } 
+    const updatedEmployee = await AuthorityInformation.findOne({
+      where: { id },
     });
 
     return res.status(200).json({
@@ -821,10 +986,11 @@ const toggleEmployeeStatus = async (req, res, next) => {
     const { status } = req.body;
 
     // Validate status
-    const validStatuses = ['active', 'inactive', 'pending'];
+    const validStatuses = ["active", "inactive", "pending"];
     if (!status || !validStatuses.includes(status)) {
       return res.status(400).json({
-        message: "Invalid status! Status must be one of: active, inactive, pending",
+        message:
+          "Invalid status! Status must be one of: active, inactive, pending",
       });
     }
 
@@ -832,7 +998,7 @@ const toggleEmployeeStatus = async (req, res, next) => {
     const employee = await AuthorityInformation.findOne({
       where: { id },
     });
-    
+
     if (!employee) {
       return res.status(404).json({
         message: "Employee not found!",
@@ -840,14 +1006,11 @@ const toggleEmployeeStatus = async (req, res, next) => {
     }
 
     // Update the status
-    await AuthorityInformation.update(
-      { status },
-      { where: { id } }
-    );
+    await AuthorityInformation.update({ status }, { where: { id } });
 
     // Fetch the updated employee
-    const updatedEmployee = await AuthorityInformation.findOne({ 
-      where: { id } 
+    const updatedEmployee = await AuthorityInformation.findOne({
+      where: { id },
     });
 
     return res.status(200).json({
@@ -868,7 +1031,7 @@ const deleteEmployee = async (req, res, next) => {
     const existingEmployee = await AuthorityInformation.findOne({
       where: { id },
     });
-    
+
     if (!existingEmployee) {
       return res.status(404).json({
         message: "Employee not found!",
@@ -918,12 +1081,13 @@ const searchEmployeeAdvanced = async (req, res, next) => {
     };
 
     // Search for employees
-    const { count, rows: employees } = await AuthorityInformation.findAndCountAll({
-      where: searchConditions,
-      limit: limitNumber,
-      offset: offset,
-      order: [["fullName", "ASC"]],
-    });
+    const { count, rows: employees } =
+      await AuthorityInformation.findAndCountAll({
+        where: searchConditions,
+        limit: limitNumber,
+        offset: offset,
+        order: [["fullName", "ASC"]],
+      });
 
     // Calculate total pages
     const totalPages = Math.ceil(count / limitNumber);
@@ -998,6 +1162,54 @@ const getEmployeeByUserId = async (req, res, next) => {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//! Check user credentials (login) - Simplified version
 const checkUserCredentials = async (req, res, next) => {
   try {
     const { userId, password } = req.body;
@@ -1005,20 +1217,29 @@ const checkUserCredentials = async (req, res, next) => {
     // Check if userId and password are provided
     if (!userId || !password) {
       return res.status(400).json({
+        success: false,
         message: "Both userId and password are required.",
       });
     }
 
-    // Find the user by userId in ClientInformation table
-    let user = await ClientInformation.findOne({ where: { userId } });
+    // Find the user by userId in ClientInformation table with password
+    let user = await ClientInformation.findOne({
+      where: { userId },
+    });
+
+    let userType = "client";
 
     // If user is not found in ClientInformation, search in AuthorityInformation
     if (!user) {
-      user = await AuthorityInformation.findOne({ where: { userId } });
+      user = await AuthorityInformation.findOne({
+        where: { userId },
+      });
+      userType = "authority";
 
       // If user is not found in AuthorityInformation either
       if (!user) {
         return res.status(404).json({
+          success: false,
           message: "User not found. Please check your userId.",
         });
       }
@@ -1027,68 +1248,75 @@ const checkUserCredentials = async (req, res, next) => {
     // Check if the password matches
     if (user.password !== password) {
       return res.status(401).json({
+        success: false,
         message: "Incorrect password. Please try again.",
       });
     }
 
-    // If everything is correct, return success
-    return res.status(200).json({
-      message: "Login successful!",
-      data: user,
-    });
-  } catch (error) {
-    next(error);
-  }
-};
+    // Check user status - Only allow login if status is 'active'
+    if (user.status.toLowerCase() !== "active") {
+      let statusMessage = "";
 
+      if (user.status.toLowerCase() === "pending") {
+        statusMessage =
+          "Your account is pending approval. You will be able to login once your account is approved by admin.";
+      } else if (user.status.toLowerCase() === "inactive") {
+        statusMessage =
+          "Your account is currently inactive. Please contact support to reactivate your account.";
+      } else {
+        statusMessage = `Your account status is "${user.status}". Please contact support for assistance.`;
+      }
 
-
-
-const checkEmployeeCredentials = async (req, res, next) => {
-  try {
-    const { userId, password } = req.body;
-
-    // Check if userId and password are provided
-    if (!userId || !password) {
-      return res.status(400).json({
-        message: "Both userId and password are required.",
+      return res.status(403).json({
+        success: false,
+        message: statusMessage,
+        accountInfo: {
+          userId: user.userId,
+          fullName: user.fullName,
+          email: user.email,
+          status: user.status,
+          userType: userType,
+        },
       });
     }
 
-    // Find the user by userId in ClientInformation table
-    let user = await ClientInformation.findOne({ where: { userId } });
+    // Remove password from response
+    const userResponse = user.toJSON();
+    delete userResponse.password;
 
-    // If user is not found in ClientInformation, search in AuthorityInformation
-    if (!user) {
-      user = await AuthorityInformation.findOne({ where: { userId } });
+    // Add package details for clients
+    if (userType === "client" && userResponse.package) {
+      const packageDetails = await Package.findOne({
+        where: { id: userResponse.package },
+        attributes: [
+          "id",
+          "packageName",
+          "packageBandwidth",
+          "packagePrice",
+          "packageDetails",
+          "duration",
+          "status",
+        ],
+      });
 
-      // If user is not found in AuthorityInformation either
-      if (!user) {
-        return res.status(404).json({
-          message: "User not found. Please check your userId.",
-        });
+      if (packageDetails) {
+        userResponse.package = packageDetails.packageName; // Replace ID with name
+        userResponse.packageDetails = packageDetails.toJSON(); // Add full package details
       }
     }
 
-    // Check if the password matches
-    if (user.password !== password) {
-      return res.status(401).json({
-        message: "Incorrect password. Please try again.",
-      });
-    }
+    // Add user type to response
+    userResponse.userType = userType;
 
-    // If everything is correct, return success
     return res.status(200).json({
+      success: true,
       message: "Login successful!",
-      data: user,
+      data: userResponse,
     });
   } catch (error) {
     next(error);
   }
 };
-
-
-
 
 module.exports = {
   createAuthority,
@@ -1100,7 +1328,6 @@ module.exports = {
   searchEmployeeAdvanced,
   getAllAuthorities,
 
-
   getClientById,
   createClient,
   getClientStats,
@@ -1109,9 +1336,7 @@ module.exports = {
   updateClientStatus,
   updateClient,
   deleteClient,
-
+  // getPackageDataByClientId,
 
   checkUserCredentials,
-  checkEmployeeCredentials
-
 };

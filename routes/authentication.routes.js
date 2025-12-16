@@ -1,6 +1,7 @@
 const express = require("express");
 const { createClient, checkUserCredentials, getClientsByReferCode, createAuthority, getAllClients, getAllAuthorities, updateClient, deleteClient, getClientById, getEmployeeById, updateEmployee, deleteEmployee, searchEmployeeAdvanced, getEmployeeByUserId } = require("../controller/auth/signup");
 const { addRolePermissions, getPermissionsForRole, getPermissions, updatePermission, roleAccordingToId } = require("../controller/user/role-permission");
+const { getSuperAdminDashboard,  getClientGrowthData, getDashboardStats, getRecentActivities, getFinancialOverview, getEmployeePerformance } = require("../controller/auth/superAdminDashboard.controller");
 const router = express.Router();
 
 
@@ -11,7 +12,8 @@ router.put("/update-client/:id", updateClient);
 router.delete("/delete-client/:id", deleteClient);
 router.get("/get-refered-users-according-to-userId/:userId", getClientsByReferCode);
 router.get("/get-clients", getAllClients);
-router.get("/get-client-according-to-id/:id", getClientById); 
+router.get("/get-client-according-to-id/:id", getClientById);
+// router.get("/get-client-dashboard-data", getDataById);
 
 
 
@@ -29,6 +31,21 @@ router.get('/search', searchEmployeeAdvanced);
 router.get('/user/:userId', getEmployeeByUserId);
 router.put("/update-employee/:id", updateEmployee);
 router.delete("/delete-employee/:id", deleteEmployee);
+
+
+
+
+
+
+
+
+//! Super-Admin Routes
+router.get("/super-admin-dashboard", getSuperAdminDashboard);
+router.get("/dashboard-stats", getDashboardStats);
+router.get("/recent-activities", getRecentActivities);
+router.get("/financial-overview", getFinancialOverview);
+router.get("/employee-performance", getEmployeePerformance);
+router.get("/client-growth", getClientGrowthData);
 
 
 
