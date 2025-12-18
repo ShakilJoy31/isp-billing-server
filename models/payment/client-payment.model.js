@@ -21,6 +21,14 @@ const Transaction = sequelize.define("Transaction", {
         type: dt.FLOAT,
         allowNull: false,
     },
+    billingMonth: {
+        type: dt.STRING,
+        allowNull: false,
+    },
+    billingYear: {
+        type: dt.STRING,
+        allowNull: false,
+    },
     phoneNumber: {
         type: dt.STRING,
         allowNull: false,

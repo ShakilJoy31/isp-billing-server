@@ -130,6 +130,17 @@ const ClientInformation = sequelize.define(
       type: dt.STRING,
       allowNull: false,
     },
+    // New fields
+    routerLoginId: {
+      type: dt.STRING,
+      allowNull: true,
+      defaultValue: null,
+    },
+    routerLoginPassword: {
+      type: dt.STRING,
+      allowNull: true,
+      defaultValue: null,
+    },
   },
   {
     tableName: "client-informations",

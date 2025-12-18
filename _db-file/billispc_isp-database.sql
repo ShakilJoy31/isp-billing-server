@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Dec 16, 2025 at 08:46 PM
+-- Generation Time: Dec 17, 2025 at 04:00 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -63,7 +63,8 @@ INSERT INTO `authority-informations` (`id`, `address`, `age`, `bloodGroup`, `dat
 (4, 'dfgghdfgh', 44, 'O+', '1981-12-07 00:00:00', 'dfg@gmail.com', '', 'dfgfdfgf', 'dfsgfd', 'jhfgj', 'Full Time', 'Unmarried', '017854343534', '5465646456', 'Christianity', 'staff', 'Male', 'D8892', '017854343534', 'active', 25000.00, '2025-12-07 19:33:57', '2025-12-07 19:33:57'),
 (5, 'Dhaka', 55, 'O-', '1970-12-07 00:00:00', 'jjh@gmail.com', '', 'dfgfd', 'gdfsgfd', 'dtryt', 'Contractual', 'Unmarried', '01776437542', '4656757465', 'Buddhism', 'support', 'Male', 'G2850', '01776437542', 'active', 40000.00, '2025-12-07 19:47:50', '2025-12-07 19:47:50'),
 (6, 'fghdfgh', 43, 'B-', '1982-12-07 00:00:00', 'fghnn@gmail.com', 'http://localhost:2000//uploads/f5c7d7d3e6e1de48.jpeg', 'kjh', 'Supervisor2', '54fghgh', 'Full Time', 'Unmarried', '0546785443', '456546', 'Christianity', 'supervisor', 'Male', 'G2369', '111111', 'active', 50000.00, '2025-12-07 19:54:05', '2025-12-10 18:53:08'),
-(7, 'House 45, Road 12, Dhanmondi, Dhaka 1209, Bangladesh', 31, 'B+', '1992-11-25 00:00:00', 'abdul.rahman@example.com', 'https//fhgsdjifgdfsgdfg', 'Mohammed Ali Khan', 'Abdul Rahman Khan', 'IT Department', 'Full Time', 'Married', '+8801712345678', '1234567890123', 'Islam', 'admin', 'Male', 'abdul6516@ringtel', '+8801712345678', 'active', 55000.00, '2025-12-15 18:19:16', '2025-12-15 18:19:16');
+(7, 'House 45, Road 12, Dhanmondi, Dhaka 1209, Bangladesh', 31, 'B+', '1992-11-25 00:00:00', 'abdul.rahman@example.com', 'https//fhgsdjifgdfsgdfg', 'Mohammed Ali Khan', 'Abdul Rahman Khan', 'IT Department', 'Full Time', 'Married', '+8801712345678', '1234567890123', 'Islam', 'admin', 'Male', 'abdul6516@ringtel', '+8801712345678', 'active', 55000.00, '2025-12-15 18:19:16', '2025-12-15 18:19:16'),
+(8, 'Dhaka', 22, 'AB+', '2003-12-16 00:00:00', 'abid@gmail.com', 'https://server.billisp.com/uploads/469961eba90a3002.JPG', 'Rejoyan', 'Abid Morshed', 'Bill Collection', 'Full Time', 'Unmarried', '01777777777', '564635463', 'Islam', 'staff', 'Male', 'abid1264@ringtel', '01777777777', 'active', 21999.99, '2025-12-17 13:33:05', '2025-12-17 13:33:05');
 
 -- --------------------------------------------------------
 
@@ -346,11 +347,13 @@ INSERT INTO `client-informations` (`id`, `customerId`, `userId`, `fullName`, `ph
 (1, 'mdu@ringtel', 'residential_mdu@ringtel', 'Md. Test User', NULL, 'Md. Test Father', '1995-01-01 00:00:00', 29, 'Male', 'Unmarried', '1112223334445', NULL, NULL, 'Full Time', '01700000000', 'test@example.com', 'residential', 'Basic', 'Dhaka', 'Mirpur', '101', '25', '13', 'Block A', NULL, NULL, NULL, 'client', 'pending', 'mobileNo', '2025-12-07 21:21:09', '2025-12-07 21:21:09'),
 (2, 'dsf@ringtel', 'residential_dsf@ringtel', 'dsf', 'https://server.billisp.com/uploads/6ba074f7b3c367d7.jpeg', 'dsf', '2025-12-26 00:00:00', 0, 'Male', 'Unmarried', '43545', 'dfgsg', 'dfgdfg', 'Full Time', '01761043883', 'dsfg@gmail.com', 'residential', 'Basic', 'Sylhet', 'Rural', 'fgh', '65', '65', 'hf', 'fghfg', NULL, NULL, 'client', 'active', '01761043883', '2025-12-07 21:33:36', '2025-12-07 21:35:56'),
 (3, 'jabedk@ringtel', 'corporate_jabedk@ringtel', 'Jabed Khan', 'https://server.billisp.com/uploads/919d2a03102ee97d.jpeg', 'Vai', '2025-12-17 00:00:00', 33, 'Male', 'Unmarried', '435435435', 'Dhaka', 'adsfh', 'Full Time', '01746757435', 'dfgg@gmail.com', 'corporate', 'Family Plus 30 Mbps - Quarterly', 'Rajshahi', 'Suburban', 'dfg', '546', '546', '54dghhfg', 'dfgdf', NULL, NULL, 'client', 'pending', '01746757435', '2025-12-08 14:47:50', '2025-12-08 14:47:50'),
-(4, 'shamim@ringtel', 'shamim@ringtel', 'Shamim Hasan', NULL, 'Md. Test Father', '1995-01-01 00:00:00', 29, 'Male', 'Unmarried', '1112223334445', 'dsf', NULL, 'Full Time', '01700000000', 'test@example.com', 'residential', 'Basic', 'Dhaka', 'Mirpur', '101', '25', '13', 'Block A', NULL, NULL, NULL, 'client', 'pending', '01700000000', '2025-12-10 12:30:40', '2025-12-10 12:30:40'),
 (5, 'shamim1@ringtel', 'shamim1@ringtel', 'Shamim Hasan', NULL, 'Md. Test Father', '1995-01-01 00:00:00', 29, 'Male', 'Unmarried', '1112223334445', 'dsf', NULL, 'Full Time', '01700000000', 'test1@example.com', 'residential', 'Basic', 'Dhaka', 'Mirpur', '101', '25', '13', 'Block A', NULL, NULL, NULL, 'Super-Admin', 'active', '01700000000', '2025-12-10 12:34:24', '2025-12-10 12:34:24'),
 (8, 'abdur@ringtel', 'abdur@ringtel', 'Abdur Rahman', NULL, 'Md. Abdul Karim', '1992-05-15 00:00:00', 32, 'Male', 'Married', '1992051523456', 'Green Delta Insurance Company', 'Executive', 'Full Time', '01711223344', 'abdur.rahman@example.com', 'residential', 'Premium', 'Dhaka', 'Gulshan', '5B', '78', '12', 'Near Gulshan 1 Park', 'Fiber optic, Wi-Fi router included', NULL, 'REF789012', 'client', 'active', '01711223344', '2025-12-14 15:22:15', '2025-12-14 15:22:15'),
 (10, 'fghdgh@ringtel', 'fghdgh@ringtel', 'fghdgh', NULL, 'fghfg', '1999-12-22 00:00:00', 25, 'Male', 'Unmarried', '567657', 'fghdfgh', 'fhgdh', 'Contractual', '01761043883', 'dfghg@gmail.com', 'corporate', 'Family Plus 30 Mbps - Quarterly', 'Mirpur', 'Downtown Zone7', 'dfg', 'dfg', 'dfg', 'dfg', 'dfsgdf', 200, NULL, 'client', 'pending', '7nhiA!O1%Pf0', '2025-12-14 15:46:18', '2025-12-14 15:46:18'),
-(11, 'sadfdsf@ringtel', 'sadfdsf@ringtel', 'sadfdsf', NULL, 'sdf', '2019-07-10 00:00:00', 0, 'Male', 'Unmarried', '546546546', 'sadfg', 'fsadfsdf', 'Full Time', '01761043883', 'asjnj@gmai.com', 'residential', '1', 'Mirpur', 'Dokkhin para', 'fghfg', 'fgh', 'dfgh', 'dfsgdf', 'fdghdfg', 500, NULL, 'client', 'active', '01761043883', '2025-12-14 18:39:19', '2025-12-14 20:36:32');
+(11, 'sadfdsf@ringtel', 'sadfdsf@ringtel', 'sadfdsf', NULL, 'sdf', '2019-07-10 00:00:00', 0, 'Male', 'Unmarried', '546546546', 'sadfg', 'fsadfsdf', 'Full Time', '01761043883', 'asjnj@gmai.com', 'residential', '1', 'Mirpur', 'Dokkhin para', 'fghfg', 'fgh', 'dfgh', 'dfsgdf', 'fdghdfg', 500, NULL, 'client', 'active', '01761043883', '2025-12-14 18:39:19', '2025-12-14 20:36:32'),
+(12, 'shamim@ringtel', 'shamim@ringtel', 'Shamim', NULL, 'fgdsgdf', '2015-02-03 00:00:00', 0, 'Male', 'Unmarried', '5436546', 'dfgsdf', 'gdfsg', 'Part Time', '01700000000', 'shamim@gmail.com', 'commercial', '1', 'Mirpur', 'Downtown Zone7', '435', '435', 'hgdf', 'dfgh', 'fgdhg', 280, NULL, 'client', 'active', '01700000000', '2025-12-16 20:55:43', '2025-12-16 20:56:28'),
+(13, 'shakil@ringtel', 'shakil@ringtel', 'Shakil', NULL, 'Dinislam', '2013-02-04 00:00:00', 0, 'Male', 'Unmarried', '465747657657', 'Motijhil', 'Engineer', 'Full Time', '01777777777', 'shakil@gmail.com', 'corporate', '1', 'Saver', 'Downtown Zone7', 'dfsg', '433', 'dfgh', 'drstgdfsg', 'Full speed connection', 300, 'shamim@ringtel', 'client', 'active', '01777777777', '2025-12-17 13:43:18', '2025-12-17 13:43:30'),
+(14, 'dfsgdfghjgkjhgk@ringtel', 'dfsgdfghjgkjhgk@ringtel', 'dfsgdfghjgkjhgk', NULL, 'jhgkjhk', '2004-02-02 00:00:00', 21, 'Male', 'Unmarried', '567868', 'jgk', 'jhgkjhgkjhg', 'Full Time', '01744444444', 'hgfjfg@gmail.com', 'residential', '1', 'Saver', 'Downtown Zone7', 'sdf', 'dsaf', '435', 'dfsgdfg', 'fdsg', 400, 'shakil@ringtel', 'client', 'active', '01744444444', '2025-12-17 13:46:27', '2025-12-17 13:46:27');
 
 -- --------------------------------------------------------
 
@@ -482,7 +485,8 @@ INSERT INTO `employee_bill_collection` (`id`, `clientId`, `clientName`, `clientP
 (1, 'sadfdsf@ringtel', 'sadfdsf', '01761043883', 'fghfg, fgh, dfgh, Dokkhin para', 'abdul6516@ringtel', 'Abdul Rahman Khan', 'INV-2025-01-sadfdsf@ringtel', '2025-01', 1500.00, 'cash', NULL, 'January bill collected in person', '2025-12-16 12:11:20', '18:11:20', 'RCT-2025-12-000001', 'collected', 'Customer paid full amount, no issues', 'receipts/image_001.jpg', NULL, NULL, NULL, NULL, NULL, NULL, '2025-12-16 12:11:20', '2025-12-16 12:11:20'),
 (2, 'sadfdsf@ringtel', 'sadfdsf', '01761043883', 'fghfg, fgh, dfgh, Dokkhin para', 'abdul6516@ringtel', 'Abdul Rahman Khan', 'INV-2025-12-sadfdsf@ringtel', '2025-12', 500.00, 'cash', '', 'ggdfs', '2025-12-16 17:12:09', '23:12:09', 'RCT-2025-12-000002', 'deposited', 'dfgdf', 'https://server.billisp.com/uploads/90b3e529abceae7f.jpg', 'abdul6516@ringtel', '2025-12-16 17:12:47', 'I get it. ', 'abdul6516@ringtel', '2025-12-16 17:12:58', 'sdfa', '2025-12-16 17:12:09', '2025-12-16 17:12:58'),
 (3, 'sadfdsf@ringtel', 'sadfdsf', '01761043883', 'fghfg, fgh, dfgh, Dokkhin para', 'G2369', 'Supervisor2', 'INV-2025-08-sadfdsf@ringtel', '2025-08', 500.00, 'bkash', 'fgsdfgdf', 'dfgfsg', '2025-12-16 18:17:52', '00:17:52', 'RCT-2025-12-000003', 'deposited', 'dfgdf', 'https://server.billisp.com/uploads/816f48669098f851.jpeg', 'shamim1@ringtel', '2025-12-16 18:18:16', 'jhgfjfhgj', 'shamim1@ringtel', '2025-12-16 18:18:25', 'fgjhhgj', '2025-12-16 18:17:52', '2025-12-16 18:18:25'),
-(4, 'sadfdsf@ringtel', 'sadfdsf', '01761043883', 'fghfg, fgh, dfgh, Dokkhin para', 'G2369', 'Supervisor2', 'INV-2025-06-sadfdsf@ringtel', '2025-06', 500.00, 'cash', '', 'fdgsdf', '2025-12-16 18:47:57', '00:47:57', 'RCT-2025-12-000004', 'collected', 'dfgdf', '', NULL, NULL, NULL, NULL, NULL, NULL, '2025-12-16 18:47:57', '2025-12-16 18:48:25');
+(4, 'sadfdsf@ringtel', 'sadfdsf', '01761043883', 'fghfg, fgh, dfgh, Dokkhin para', 'G2369', 'Supervisor2', 'INV-2025-06-sadfdsf@ringtel', '2025-06', 500.00, 'cash', '', 'fdgsdf', '2025-12-16 18:47:57', '00:47:57', 'RCT-2025-12-000004', 'verified', 'dfgdf', '', 'shamim1@ringtel', '2025-12-17 14:36:34', 'Paichi vai', NULL, NULL, NULL, '2025-12-16 18:47:57', '2025-12-17 14:36:34'),
+(5, 'shakil@ringtel', 'Shakil', '01777777777', 'dfsg, 433, dfgh, Downtown Zone7', 'abid1264@ringtel', 'Abid Morshed', 'INV-2025-08-shakil@ringtel', '2025-08', 300.00, 'bkash', '6574657657', 'dsfghdfgh', '2025-12-17 14:13:29', '20:13:29', 'RCT-2025-12-000005', 'verified', 'fgh', '', 'shamim1@ringtel', '2025-12-17 14:54:23', 'The second test.', NULL, NULL, NULL, '2025-12-17 14:13:29', '2025-12-17 14:54:23');
 
 -- --------------------------------------------------------
 
@@ -840,7 +844,9 @@ CREATE TABLE `transactions` (
 --
 
 INSERT INTO `transactions` (`id`, `userId`, `trxId`, `amount`, `phoneNumber`, `status`, `remark`, `approvedBy`, `approvedAt`, `approvalRemark`, `rejectedBy`, `rejectedAt`, `rejectionReason`, `createdAt`, `updatedAt`) VALUES
-(1, '11', 'fgdhgh', 500, '4675657', 'approved', '', '5', '2025-12-14 22:51:29', 'Paichi vai.', NULL, NULL, NULL, '2025-12-14 21:48:07', '2025-12-14 22:51:29');
+(1, '11', 'fgdhgh', 500, '4675657', 'approved', '', '5', '2025-12-14 22:51:29', 'Paichi vai.', NULL, NULL, NULL, '2025-12-14 21:48:07', '2025-12-14 22:51:29'),
+(2, '12', 'dfsgdfdfg', 280, '01743543', 'approved', '', '5', '2025-12-16 21:57:06', '', NULL, NULL, NULL, '2025-12-16 21:14:15', '2025-12-16 21:57:06'),
+(4, '13', 'RCT-2025-12-000005', 300, '01777777777', 'approved', 'The second test.', NULL, NULL, NULL, NULL, NULL, NULL, '2025-12-17 14:54:23', '2025-12-17 14:54:23');
 
 -- --------------------------------------------------------
 
@@ -1127,7 +1133,7 @@ ALTER TABLE `zones`
 -- AUTO_INCREMENT for table `authority-informations`
 --
 ALTER TABLE `authority-informations`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
 
 --
 -- AUTO_INCREMENT for table `bank_accounts`
@@ -1169,7 +1175,7 @@ ALTER TABLE `cities`
 -- AUTO_INCREMENT for table `client-informations`
 --
 ALTER TABLE `client-informations`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
 
 --
 -- AUTO_INCREMENT for table `contacts`
@@ -1187,7 +1193,7 @@ ALTER TABLE `employeeattendances`
 -- AUTO_INCREMENT for table `employee_bill_collection`
 --
 ALTER TABLE `employee_bill_collection`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT for table `expenses`
@@ -1247,7 +1253,7 @@ ALTER TABLE `tickets`
 -- AUTO_INCREMENT for table `transactions`
 --
 ALTER TABLE `transactions`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT for table `users`

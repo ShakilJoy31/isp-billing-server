@@ -36,12 +36,12 @@ const transformClientWithPackage = async (client) => {
 
   if (packageDetails) {
     clientData.package = packageDetails.packageName; // Replace ID with name
+    clientData.packageId = clientData.package; // Store original ID
     clientData.packageDetails = packageDetails; // Add full package details
   }
 
   return clientData;
 };
-
 //! Create new client
 const createClient = async (req, res, next) => {
   try {
@@ -55,11 +55,12 @@ const createClient = async (req, res, next) => {
       nidOrPassportNo,
       jobPlaceName,
       jobCategory,
+      customerId,
       jobType,
       mobileNo,
       email,
       customerType,
-      package, // This should be package ID
+      package,
       location,
       area,
       flatAptNo,
@@ -73,11 +74,12 @@ const createClient = async (req, res, next) => {
       password,
       status,
       role,
+      routerLoginId,
+      routerLoginPassword,
     } = req.body;
 
     // Generate unique IDs
-    const customerId = await generateUniqueUserId(fullName);
-    const userId = customerId;
+    const userId = await generateUniqueUserId(fullName);
 
     // Create new client
     const newClient = await ClientInformation.create({
@@ -97,7 +99,7 @@ const createClient = async (req, res, next) => {
       mobileNo,
       email,
       customerType,
-      package, // Store the package ID
+      package,
       location,
       area,
       flatAptNo,
@@ -110,6 +112,9 @@ const createClient = async (req, res, next) => {
       role: role,
       status: status,
       password: password || mobileNo,
+      // New fields
+      routerLoginId: routerLoginId || null,
+      routerLoginPassword: routerLoginPassword || null,
     });
 
     // Transform response with package details
@@ -224,6 +229,7 @@ const updateClient = async (req, res, next) => {
       fullName,
       fatherOrSpouseName,
       dateOfBirth,
+      customerId,
       age,
       sex,
       maritalStatus,
@@ -247,6 +253,9 @@ const updateClient = async (req, res, next) => {
       photo,
       status,
       password,
+      // New fields
+      routerLoginId,
+      routerLoginPassword,
     } = req.body;
 
     // Check if client exists
@@ -304,6 +313,7 @@ const updateClient = async (req, res, next) => {
       jobCategory,
       jobType,
       mobileNo,
+      customerId,
       email,
       customerType,
       package, // Store the package ID
@@ -318,6 +328,9 @@ const updateClient = async (req, res, next) => {
       referId,
       photo,
       status,
+      // New fields
+      routerLoginId: routerLoginId || existingClient.routerLoginId,
+      routerLoginPassword: routerLoginPassword || existingClient.routerLoginPassword,
     };
 
     // Update password if provided

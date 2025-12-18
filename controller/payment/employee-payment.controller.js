@@ -4,6 +4,8 @@ const EmployeePayment = require("../../models/payment/employee-payment.model");
 const ClientInformation = require("../../models/Authentication/client.model");
 const AuthorityInformation = require("../../models/Authentication/authority.model");
 const sequelize = require("../../database/connection");
+const Package = require("../../models/package/package.model");
+const Transaction = require("../../models/payment/client-payment.model");
 
 // Helper: Generate receipt number
 const generateReceiptNumber = async () => {
@@ -30,7 +32,7 @@ const generateReceiptNumber = async () => {
   return `${prefix}${sequence.toString().padStart(6, "0")}`;
 };
 
-// 1. Create Employee Payment
+//! 1. Create Employee Payment
 const createEmployeePayment = async (req, res) => {
   try {
     const {
@@ -54,6 +56,112 @@ const createEmployeePayment = async (req, res) => {
       });
     }
 
+    // Parse billingMonth - handle both "2026-01" and "January 2025" formats
+    let monthName, billingYear, formattedBillingMonth;
+
+    // Check if format is YYYY-MM (e.g., "2026-01")
+    const yyyyMmRegex = /^(\d{4})-(\d{2})$/;
+    // Check if format is Month YYYY (e.g., "January 2025")
+    const monthYearRegex = /^(\w+)\s+(\d{4})$/;
+
+    if (yyyyMmRegex.test(billingMonth)) {
+      // Format: YYYY-MM (e.g., "2026-01")
+      const match = billingMonth.match(yyyyMmRegex);
+      const year = match[1];
+      const monthNum = parseInt(match[2], 10);
+
+      // Convert month number to month name
+      const monthNames = [
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+      ];
+
+      if (monthNum < 1 || monthNum > 12) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid month number in billingMonth. Use 01-12",
+        });
+      }
+
+      monthName = monthNames[monthNum - 1];
+      billingYear = year;
+      formattedBillingMonth = `${monthName} ${billingYear}`;
+    } else if (monthYearRegex.test(billingMonth)) {
+      // Format: Month YYYY (e.g., "January 2025")
+      const match = billingMonth.match(monthYearRegex);
+      monthName = match[1];
+      billingYear = match[2];
+      formattedBillingMonth = billingMonth; // Already in correct format
+    } else {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid billing month format. Use 'YYYY-MM' (e.g., '2026-01') or 'Month YYYY' (e.g., 'January 2025')",
+      });
+    }
+
+    // FIRST: Find client to get their numeric ID
+    const client = await ClientInformation.findOne({
+      where: { userId: clientUserId },
+    });
+
+    if (!client) {
+      return res.status(404).json({
+        success: false,
+        message: "Client not found",
+      });
+    }
+
+    // First, get the user's actual ID from the User table
+    const user = await ClientInformation.findOne({
+      where: { userId: clientUserId },
+      attributes: ['id']
+    });
+
+    let existingClientTransaction = null;
+    
+    if (user) {
+      // Now query Transaction table with the numeric user ID
+      existingClientTransaction = await Transaction.findOne({
+        where: {
+          userId: user.id.toString(),
+          billingMonth: monthName,
+          billingYear: billingYear,
+          status: {
+            [Op.in]: ["pending", "approved"],
+          },
+        },
+      });
+    }
+
+    if (existingClientTransaction) {
+      return res.status(409).json({
+        success: false,
+        message: `Client has already made a payment for ${monthName} ${billingYear} via self-payment.`,
+        data: {
+          existingTransaction: {
+            id: existingClientTransaction.id,
+            amount: existingClientTransaction.amount,
+            status: existingClientTransaction.status,
+            trxId: existingClientTransaction.trxId,
+            billingMonth: existingClientTransaction.billingMonth,
+            billingYear: existingClientTransaction.billingYear,
+            createdAt: existingClientTransaction.createdAt
+          }
+        }
+      });
+    }
+
     // Find employee
     const employee = await AuthorityInformation.findOne({
       where: { userId: employeeId },
@@ -66,34 +174,32 @@ const createEmployeePayment = async (req, res) => {
       });
     }
 
-    // Find client
-    const client = await ClientInformation.findOne({
-      where: { userId: clientUserId },
-    });
-
-    if (!client) {
-      return res.status(404).json({
-        success: false,
-        message: "Client not found",
-      });
-    }
-
-    // Check if payment already exists for this month
+    // Check if payment already exists for this client for same month and year
+    // Use formattedBillingMonth for the check
     const existingPayment = await EmployeePayment.findOne({
       where: {
         clientId: clientUserId,
-        billingMonth: billingMonth,
+        billingMonth: formattedBillingMonth, // Use formatted version
         status: {
-          [Op.notIn]: ["cancelled", "refunded"],
+          [Op.notIn]: ["cancelled", "refunded", "rejected"],
         },
       },
     });
 
     if (existingPayment) {
-      return res.status(400).json({
+      return res.status(409).json({
         success: false,
-        message: `Payment for ${billingMonth} already exists`,
-        existingPayment: existingPayment,
+        message: `Payment already exists for ${formattedBillingMonth}.`,
+        data: {
+          existingPayment: {
+            id: existingPayment.id,
+            clientName: existingPayment.clientName,
+            amount: existingPayment.amount,
+            status: existingPayment.status,
+            receiptNumber: existingPayment.receiptNumber,
+            createdAt: existingPayment.createdAt,
+          },
+        },
       });
     }
 
@@ -113,8 +219,11 @@ const createEmployeePayment = async (req, res) => {
       employeeName: employee.fullName,
 
       // Payment Information
-      invoiceId: `INV-${billingMonth}-${client.customerId}`,
-      billingMonth: billingMonth,
+      invoiceId: `INV-${formattedBillingMonth.replace(/\s+/g, "-")}-${
+        client.customerId
+      }`,
+      billingMonth: formattedBillingMonth, // Store formatted version like "January 2025"
+      billingYear: billingYear, // Store year separately
       amount: parseFloat(amount),
 
       // Payment Method
@@ -149,10 +258,21 @@ const createEmployeePayment = async (req, res) => {
         amount: amount,
         date: new Date(),
         collectedBy: employee.fullName,
+        billingPeriod: formattedBillingMonth,
       },
     });
   } catch (error) {
     console.error("Error creating employee payment:", error);
+
+    // Handle duplicate receipt number error
+    if (error.name === "SequelizeUniqueConstraintError") {
+      return res.status(409).json({
+        success: false,
+        message: "Receipt number already exists",
+        error: "Duplicate receipt number",
+      });
+    }
+
     res.status(500).json({
       success: false,
       message: "Failed to create payment",
@@ -261,46 +381,45 @@ const getPaymentsByEmployee = async (req, res) => {
 
 // Add this to your controller file
 const updateEmployeePayment = async (req, res) => {
-    try {
-        const { paymentId } = req.params;
-        const updateData = req.body;
+  try {
+    const { paymentId } = req.params;
+    const updateData = req.body;
 
-        const payment = await EmployeePayment.findByPk(paymentId);
+    const payment = await EmployeePayment.findByPk(paymentId);
 
-        if (!payment) {
-            return res.status(404).json({
-                success: false,
-                message: "Payment not found"
-            });
-        }
-
-        // Check if payment can be edited (only collected or cancelled)
-        if (payment.status !== 'collected' && payment.status !== 'cancelled') {
-            return res.status(400).json({
-                success: false,
-                message: "Only collected or cancelled payments can be edited"
-            });
-        }
-
-        // Update payment
-        await payment.update(updateData);
-
-        const updatedPayment = await EmployeePayment.findByPk(paymentId);
-
-        res.status(200).json({
-            success: true,
-            message: "Payment updated successfully",
-            data: updatedPayment
-        });
-
-    } catch (error) {
-        console.error("Error updating payment:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to update payment",
-            error: error.message
-        });
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: "Payment not found",
+      });
     }
+
+    // Check if payment can be edited (only collected or cancelled)
+    if (payment.status !== "collected" && payment.status !== "cancelled") {
+      return res.status(400).json({
+        success: false,
+        message: "Only collected or cancelled payments can be edited",
+      });
+    }
+
+    // Update payment
+    await payment.update(updateData);
+
+    const updatedPayment = await EmployeePayment.findByPk(paymentId);
+
+    res.status(200).json({
+      success: true,
+      message: "Payment updated successfully",
+      data: updatedPayment,
+    });
+  } catch (error) {
+    console.error("Error updating payment:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update payment",
+      error: error.message,
+    });
+  }
 };
 
 // 3. Get Payment Details
@@ -410,14 +529,14 @@ const searchClientForPayment = async (req, res) => {
           { nidOrPassportNo: { [Op.like]: `%${search}%` } },
         ],
       },
-      limit: 2000000,
+      limit: 20, // Fixed: Reduced from 2,000,000 for performance
       attributes: [
         "userId",
         "customerId",
         "fullName",
         "mobileNo",
         "email",
-        "package",
+        "package", // This stores the package ID
         "costForPackage",
         "area",
         "flatAptNo",
@@ -426,12 +545,78 @@ const searchClientForPayment = async (req, res) => {
       ],
     });
 
-    console.log(clients);
+    // Get unique package IDs from all clients
+    const packageIds = [
+      ...new Set(
+        clients
+          .map((client) => client.package)
+          .filter((id) => id && !isNaN(id)) // Filter out non-numeric IDs
+          .map((id) => parseInt(id)) // Convert string to number
+      ),
+    ];
+
+    console.log("Package IDs found:", packageIds);
+
+    // Fetch all packages in one query
+    let packages = [];
+    let packageMap = {};
+
+    if (packageIds.length > 0) {
+      packages = await Package.findAll({
+        where: { id: packageIds },
+        attributes: [
+          "id",
+          "packageName",
+          "packageBandwidth",
+          "packagePrice",
+          "duration",
+        ],
+      });
+
+      // Create lookup map: packageId -> package details
+      packages.forEach((pkg) => {
+        packageMap[pkg.id] = {
+          name: pkg.packageName,
+          bandwidth: pkg.packageBandwidth,
+          price: pkg.packagePrice,
+          duration: pkg.duration,
+        };
+      });
+
+      console.log(
+        "Packages fetched:",
+        packages.map((p) => ({ id: p.id, name: p.packageName }))
+      );
+    }
+
+    // Transform clients with package names
+    const transformedClients = clients.map((client) => {
+      const clientData = client.toJSON();
+      const packageId = parseInt(clientData.package);
+
+      return {
+        userId: clientData.userId,
+        customerId: clientData.customerId,
+        fullName: clientData.fullName,
+        mobileNo: clientData.mobileNo,
+        email: clientData.email,
+        package: packageMap[packageId]
+          ? packageMap[packageId].name
+          : clientData.package, // Use name if found, otherwise original value
+        packageDetails: packageMap[packageId] || null,
+        packageId: clientData.package, // Keep original ID
+        costForPackage: clientData.costForPackage,
+        area: clientData.area,
+        flatAptNo: clientData.flatAptNo,
+        houseNo: clientData.houseNo,
+        roadNo: clientData.roadNo,
+      };
+    });
 
     res.status(200).json({
       success: true,
       message: "Clients found",
-      data: clients,
+      data: transformedClients,
     });
   } catch (error) {
     console.error("Error searching clients:", error);
@@ -509,7 +694,7 @@ const getClientPaymentHistory = async (req, res) => {
   }
 };
 
-// 7. Admin: Get All Employee Collections
+//! 7. Admin: Get All Employee Collections
 const getAllEmployeeCollections = async (req, res) => {
   try {
     const {
@@ -558,12 +743,43 @@ const getAllEmployeeCollections = async (req, res) => {
     // Get total count
     const totalItems = await EmployeePayment.count({ where: whereClause });
 
-    // Get paginated data
+    // Get paginated data WITHOUT include (since no association)
     const payments = await EmployeePayment.findAll({
       where: whereClause,
       limit: limitNumber,
       offset: offset,
       order: [["collectionDate", "DESC"]],
+    });
+
+    // Extract all unique client user IDs
+    const clientUserIds = [
+      ...new Set(
+        payments.map((payment) => payment.clientId).filter((id) => id)
+      ),
+    ];
+
+    // Fetch client information in one batch query
+    let clientMap = {};
+    if (clientUserIds.length > 0) {
+      const clients = await ClientInformation.findAll({
+        where: { userId: clientUserIds },
+        attributes: ["id", "userId"], // Only get id and userId
+      });
+
+      // Create lookup map: userId -> id
+      clients.forEach((client) => {
+        clientMap[client.userId] = client.id;
+      });
+    }
+
+    // Transform payments to add client ID
+    const transformedPayments = payments.map((payment) => {
+      const paymentData = payment.toJSON();
+
+      return {
+        ...paymentData,
+        clientDatabaseId: clientMap[paymentData.clientId] || null,
+      };
     });
 
     const totalPages = Math.ceil(totalItems / limitNumber);
@@ -587,7 +803,7 @@ const getAllEmployeeCollections = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "All employee collections retrieved",
-      data: payments,
+      data: transformedPayments,
       statistics: {
         totalCollections: totalItems,
         totalAmount: parseFloat(totalAmount.toFixed(2)),
@@ -1103,7 +1319,6 @@ const getAllEmployeeCollectionStats = async (req, res) => {
   }
 };
 
-
 // 13. Get All Employee Performance Stats
 const getAllEmployeePerformanceStats = async (req, res) => {
   try {
@@ -1311,5 +1526,5 @@ module.exports = {
   getEmployeeCollectionStats,
   getAllEmployeePerformanceStats,
   getAllEmployeeCollectionStats,
-  updateEmployeePayment
+  updateEmployeePayment,
 };
