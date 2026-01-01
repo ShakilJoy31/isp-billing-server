@@ -5,7 +5,7 @@ const generateUniqueUserId = require("../../utils/helper/generateUniqueId");
 const Package = require("../../models/package/package.model");
 const sequelize = require("../../database/connection");
 
-// Helper function to get package details
+//! Helper function to get package details
 const getPackageDetails = async (packageId) => {
   try {
     const package = await Package.findOne({
@@ -27,7 +27,7 @@ const getPackageDetails = async (packageId) => {
   }
 };
 
-// Helper function to transform client with package details
+//! Helper function to transform client with package details
 const transformClientWithPackage = async (client) => {
   const clientData = client.toJSON ? client.toJSON() : client;
 
@@ -42,6 +42,10 @@ const transformClientWithPackage = async (client) => {
 
   return clientData;
 };
+
+
+
+
 //! Create new client
 const createClient = async (req, res, next) => {
   try {
@@ -65,6 +69,7 @@ const createClient = async (req, res, next) => {
       area,
       flatAptNo,
       houseNo,
+      isFreeClient,
       roadNo,
       landmark,
       connectionDetails,
@@ -103,6 +108,7 @@ const createClient = async (req, res, next) => {
       location,
       area,
       flatAptNo,
+      isFreeClient,
       houseNo,
       roadNo,
       landmark,
@@ -237,6 +243,7 @@ const updateClient = async (req, res, next) => {
       jobPlaceName,
       jobCategory,
       jobType,
+      isFreeClient,
       mobileNo,
       email,
       customerType,
@@ -312,6 +319,7 @@ const updateClient = async (req, res, next) => {
       jobPlaceName,
       jobCategory,
       jobType,
+      isFreeClient,
       mobileNo,
       customerId,
       email,

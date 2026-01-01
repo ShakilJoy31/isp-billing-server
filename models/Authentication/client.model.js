@@ -13,7 +13,7 @@ const ClientInformation = sequelize.define(
     },
     customerId: {
       type: dt.STRING,
-      allowNull: false,
+      allowNull: true,
     },
     userId: {
       type: dt.STRING,
@@ -51,6 +51,11 @@ const ClientInformation = sequelize.define(
     nidOrPassportNo: {
       type: dt.STRING,
       allowNull: false,
+    },
+    isFreeClient: {
+      type: dt.BOOLEAN,
+      allowNull: true,
+      defaultValue: false,
     },
     jobPlaceName: {
       type: dt.STRING,
