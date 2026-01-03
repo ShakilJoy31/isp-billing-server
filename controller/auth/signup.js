@@ -43,9 +43,6 @@ const transformClientWithPackage = async (client) => {
   return clientData;
 };
 
-
-
-
 //! Create new client
 const createClient = async (req, res, next) => {
   try {
@@ -338,7 +335,8 @@ const updateClient = async (req, res, next) => {
       status,
       // New fields
       routerLoginId: routerLoginId || existingClient.routerLoginId,
-      routerLoginPassword: routerLoginPassword || existingClient.routerLoginPassword,
+      routerLoginPassword:
+        routerLoginPassword || existingClient.routerLoginPassword,
     };
 
     // Update password if provided
@@ -578,66 +576,13 @@ const getClientStats = async (req, res, next) => {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+//!___________________________________________________________________________________________________________________________________________________________________________________
 //! Helper function to generate unique employee ID
 const generateUniqueEmployeeId = async (fullName) => {
   try {
     // Extract first name (first word from full name)
     const firstName = fullName.trim().split(" ")[0].toLowerCase();
-    
+
     // Generate a 4-digit random number
     const randomNum = Math.floor(1000 + Math.random() * 9000);
     let userId = `${firstName}${randomNum}@ringtel`;
@@ -694,7 +639,11 @@ const createAuthority = async (req, res, next) => {
       role,
       sex,
       baseSalary,
-      status = "active", // Default to active from frontend
+      status = "active",
+      // New reference fields
+      joinedThrough,
+      emergencyContact,
+      references = [],
     } = req.body;
 
     // Validate required fields
@@ -702,6 +651,31 @@ const createAuthority = async (req, res, next) => {
       return res.status(400).json({
         message:
           "Full name, email, mobile number, role, and date of birth are required!",
+      });
+    }
+
+    // Validate reference fields
+    if (
+      !joinedThrough ||
+      !joinedThrough.name ||
+      !joinedThrough.mobileNo ||
+      !joinedThrough.relation
+    ) {
+      return res.status(400).json({
+        message:
+          "Joined Through information is required (name, mobile number, and relation)!",
+      });
+    }
+
+    if (
+      !emergencyContact ||
+      !emergencyContact.name ||
+      !emergencyContact.mobileNo ||
+      !emergencyContact.relation
+    ) {
+      return res.status(400).json({
+        message:
+          "Emergency Contact information is required (name, mobile number, and relation)!",
       });
     }
 
@@ -718,14 +692,26 @@ const createAuthority = async (req, res, next) => {
     // Generate a unique userId
     const userId = await generateUniqueEmployeeId(fullName);
 
-    // Create a new employee
+    // TEMPORARY FIX: Manually generate an ID
+    // Get the maximum id from the database
+    const maxIdResult = await AuthorityInformation.findOne({
+      attributes: [
+        [sequelize.fn('MAX', sequelize.col('id')), 'maxId']
+      ],
+      raw: true
+    });
+    
+    const nextId = (maxIdResult?.maxId || 0) + 1;
+
+    // Create a new employee with explicit ID
     const newEntry = await AuthorityInformation.create({
+      id: nextId, // Explicitly set the ID
       address,
       age: parseInt(age) || 0,
       bloodGroup: bloodGroup || "",
       dateOfBirth,
       email,
-      photo,
+      photo: photo || "/default-avatar.png", // Make sure photo is not empty
       fatherOrSpouseName,
       fullName,
       jobCategory: jobCategory || "",
@@ -737,6 +723,18 @@ const createAuthority = async (req, res, next) => {
       role,
       sex,
       baseSalary: parseFloat(baseSalary) || 0.0,
+
+      // New reference fields
+      joinedThroughName: joinedThrough.name,
+      joinedThroughMobileNo: joinedThrough.mobileNo,
+      joinedThroughRelation: joinedThrough.relation,
+      joinedThroughAddress: joinedThrough.address || "",
+
+      emergencyContactName: emergencyContact.name,
+      emergencyContactMobileNo: emergencyContact.mobileNo,
+      emergencyContactRelation: emergencyContact.relation,
+      emergencyContactAddress: emergencyContact.address || "",
+
       userId,
       password: mobileNo, // Default password is mobile number
       status: status || "active",
@@ -747,7 +745,16 @@ const createAuthority = async (req, res, next) => {
       data: newEntry,
     });
   } catch (error) {
-    console.log(error);
+    console.log("Error creating employee:", error);
+    
+    // Provide more detailed error information
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      return res.status(400).json({
+        message: "Database error: Duplicate primary key. Please contact administrator to fix the database.",
+        error: error.errors.map(e => e.message).join(', ')
+      });
+    }
+    
     next(error);
   }
 };
@@ -808,12 +815,52 @@ const getAllAuthorities = async (req, res, next) => {
         order: [["createdAt", "DESC"]],
       });
 
+    // Format employees data to match frontend structure
+    const formattedEmployees = employees.map((employee) => ({
+      id: employee.id,
+      userId: employee.userId,
+      fullName: employee.fullName,
+      email: employee.email,
+      photo: employee.photo,
+      mobileNo: employee.mobileNo,
+      role: employee.role,
+      status: employee.status,
+      fatherOrSpouseName: employee.fatherOrSpouseName,
+      dateOfBirth: employee.dateOfBirth,
+      age: employee.age,
+      sex: employee.sex,
+      maritalStatus: employee.maritalStatus,
+      nidOrPassportNo: employee.nidOrPassportNo,
+      bloodGroup: employee.bloodGroup,
+      religion: employee.religion,
+      jobCategory: employee.jobCategory,
+      jobType: employee.jobType,
+      address: employee.address,
+      baseSalary: employee.baseSalary,
+      // Format reference data
+      joinedThrough: {
+        name: employee.joinedThroughName,
+        mobileNo: employee.joinedThroughMobileNo,
+        relation: employee.joinedThroughRelation,
+        address: employee.joinedThroughAddress,
+      },
+      emergencyContact: {
+        name: employee.emergencyContactName,
+        mobileNo: employee.emergencyContactMobileNo,
+        relation: employee.emergencyContactRelation,
+        address: employee.emergencyContactAddress,
+      },
+      references: employee.additionalReferences || [],
+      createdAt: employee.createdAt,
+      updatedAt: employee.updatedAt,
+    }));
+
     // Calculate total pages
     const totalPages = Math.ceil(count / limitNumber);
 
     return res.status(200).json({
       message: "Employees retrieved successfully!",
-      data: employees,
+      data: formattedEmployees,
       pagination: {
         totalItems: count,
         totalPages: totalPages,
@@ -822,6 +869,315 @@ const getAllAuthorities = async (req, res, next) => {
       },
     });
   } catch (error) {
+    console.error("Error getting all authorities:", error);
+    next(error);
+  }
+};
+
+//! Get Employee by ID
+const getEmployeeById = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    // Check if the employee exists
+    const employee = await AuthorityInformation.findOne({
+      where: { id },
+    });
+
+    if (!employee) {
+      return res.status(404).json({
+        message: "Employee not found!",
+      });
+    }
+
+    // Format employee data
+    const formattedEmployee = {
+      id: employee.id,
+      userId: employee.userId,
+      fullName: employee.fullName,
+      email: employee.email,
+      photo: employee.photo,
+      mobileNo: employee.mobileNo,
+      role: employee.role,
+      status: employee.status,
+      fatherOrSpouseName: employee.fatherOrSpouseName,
+      dateOfBirth: employee.dateOfBirth,
+      age: employee.age,
+      sex: employee.sex,
+      maritalStatus: employee.maritalStatus,
+      nidOrPassportNo: employee.nidOrPassportNo,
+      bloodGroup: employee.bloodGroup,
+      religion: employee.religion,
+      jobCategory: employee.jobCategory,
+      jobType: employee.jobType,
+      address: employee.address,
+      baseSalary: employee.baseSalary,
+      // Format reference data
+      joinedThrough: {
+        name: employee.joinedThroughName,
+        mobileNo: employee.joinedThroughMobileNo,
+        relation: employee.joinedThroughRelation,
+        address: employee.joinedThroughAddress,
+      },
+      emergencyContact: {
+        name: employee.emergencyContactName,
+        mobileNo: employee.emergencyContactMobileNo,
+        relation: employee.emergencyContactRelation,
+        address: employee.emergencyContactAddress,
+      },
+      references: employee.additionalReferences || [],
+      createdAt: employee.createdAt,
+      updatedAt: employee.updatedAt,
+    };
+
+    return res.status(200).json({
+      message: "Employee data retrieved successfully!",
+      data: formattedEmployee,
+    });
+  } catch (error) {
+    console.error("Error getting employee by ID:", error);
+    next(error);
+  }
+};
+
+//! Update Employee
+const updateEmployee = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const {
+      address,
+      age,
+      bloodGroup,
+      dateOfBirth,
+      email,
+      photo,
+      fatherOrSpouseName,
+      fullName,
+      jobCategory,
+      jobType,
+      maritalStatus,
+      mobileNo,
+      nidOrPassportNo,
+      religion,
+      role,
+      sex,
+      baseSalary,
+      status,
+      password,
+      // New reference fields
+      joinedThrough,
+      emergencyContact,
+      references = [],
+    } = req.body;
+
+    // Check if the employee exists
+    const existingEmployee = await AuthorityInformation.findOne({
+      where: { id },
+    });
+
+    if (!existingEmployee) {
+      return res.status(404).json({
+        message: "Employee not found!",
+      });
+    }
+
+    // Check if the new email already exists (if email is being updated)
+    if (email && email !== existingEmployee.email) {
+      const emailExists = await AuthorityInformation.findOne({
+        where: { email },
+      });
+      if (emailExists) {
+        return res.status(409).json({
+          message: "This email already exists! Try a different one.",
+        });
+      }
+    }
+
+    // Prepare references data
+    let additionalReferences = existingEmployee.additionalReferences || [];
+    if (Array.isArray(references)) {
+      additionalReferences = references.map((ref) => ({
+        name: ref.name || "",
+        mobileNo: ref.mobileNo || "",
+        relation: ref.relation || "",
+        address: ref.address || "",
+      }));
+    }
+
+    // Prepare update data
+    const updateData = {
+      address: address || existingEmployee.address,
+      age: parseInt(age) || existingEmployee.age,
+      bloodGroup: bloodGroup || existingEmployee.bloodGroup,
+      dateOfBirth: dateOfBirth || existingEmployee.dateOfBirth,
+      email: email || existingEmployee.email,
+      fatherOrSpouseName:
+        fatherOrSpouseName || existingEmployee.fatherOrSpouseName,
+      fullName: fullName || existingEmployee.fullName,
+      jobCategory: jobCategory || existingEmployee.jobCategory,
+      jobType: jobType || existingEmployee.jobType,
+      maritalStatus: maritalStatus || existingEmployee.maritalStatus,
+      mobileNo: mobileNo || existingEmployee.mobileNo,
+      nidOrPassportNo: nidOrPassportNo || existingEmployee.nidOrPassportNo,
+      religion: religion || existingEmployee.religion,
+      role: role || existingEmployee.role,
+      sex: sex || existingEmployee.sex,
+      baseSalary: parseFloat(baseSalary) || existingEmployee.baseSalary,
+      status: status || existingEmployee.status,
+      photo: photo || existingEmployee.photo,
+      password: password || existingEmployee.password,
+
+      // Update reference fields
+      joinedThroughName:
+        joinedThrough?.name || existingEmployee.joinedThroughName,
+      joinedThroughMobileNo:
+        joinedThrough?.mobileNo || existingEmployee.joinedThroughMobileNo,
+      joinedThroughRelation:
+        joinedThrough?.relation || existingEmployee.joinedThroughRelation,
+      joinedThroughAddress:
+        joinedThrough?.address || existingEmployee.joinedThroughAddress,
+
+      emergencyContactName:
+        emergencyContact?.name || existingEmployee.emergencyContactName,
+      emergencyContactMobileNo:
+        emergencyContact?.mobileNo || existingEmployee.emergencyContactMobileNo,
+      emergencyContactRelation:
+        emergencyContact?.relation || existingEmployee.emergencyContactRelation,
+      emergencyContactAddress:
+        emergencyContact?.address || existingEmployee.emergencyContactAddress,
+
+      additionalReferences: additionalReferences,
+    };
+
+    // Update the employee
+    await AuthorityInformation.update(updateData, {
+      where: { id },
+    });
+
+    // Fetch the updated employee data
+    const updatedEmployee = await AuthorityInformation.findOne({
+      where: { id },
+    });
+
+    // Format the response
+    const formattedEmployee = {
+      id: updatedEmployee.id,
+      userId: updatedEmployee.userId,
+      fullName: updatedEmployee.fullName,
+      email: updatedEmployee.email,
+      photo: updatedEmployee.photo,
+      mobileNo: updatedEmployee.mobileNo,
+      role: updatedEmployee.role,
+      status: updatedEmployee.status,
+      fatherOrSpouseName: updatedEmployee.fatherOrSpouseName,
+      dateOfBirth: updatedEmployee.dateOfBirth,
+      age: updatedEmployee.age,
+      sex: updatedEmployee.sex,
+      maritalStatus: updatedEmployee.maritalStatus,
+      nidOrPassportNo: updatedEmployee.nidOrPassportNo,
+      bloodGroup: updatedEmployee.bloodGroup,
+      religion: updatedEmployee.religion,
+      jobCategory: updatedEmployee.jobCategory,
+      jobType: updatedEmployee.jobType,
+      address: updatedEmployee.address,
+      baseSalary: updatedEmployee.baseSalary,
+      joinedThrough: {
+        name: updatedEmployee.joinedThroughName,
+        mobileNo: updatedEmployee.joinedThroughMobileNo,
+        relation: updatedEmployee.joinedThroughRelation,
+        address: updatedEmployee.joinedThroughAddress,
+      },
+      emergencyContact: {
+        name: updatedEmployee.emergencyContactName,
+        mobileNo: updatedEmployee.emergencyContactMobileNo,
+        relation: updatedEmployee.emergencyContactRelation,
+        address: updatedEmployee.emergencyContactAddress,
+      },
+      references: updatedEmployee.additionalReferences || [],
+      createdAt: updatedEmployee.createdAt,
+      updatedAt: updatedEmployee.updatedAt,
+    };
+
+    return res.status(200).json({
+      message: "Employee information updated successfully!",
+      data: formattedEmployee,
+    });
+  } catch (error) {
+    console.error("Error updating employee:", error);
+    next(error);
+  }
+};
+
+//! Toggle Employee Status
+const toggleEmployeeStatus = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    // Validate status
+    const validStatuses = ["active", "inactive", "pending"];
+    if (!status || !validStatuses.includes(status)) {
+      return res.status(400).json({
+        message:
+          "Invalid status! Status must be one of: active, inactive, pending",
+      });
+    }
+
+    // Check if the employee exists
+    const employee = await AuthorityInformation.findOne({
+      where: { id },
+    });
+
+    if (!employee) {
+      return res.status(404).json({
+        message: "Employee not found!",
+      });
+    }
+
+    // Update the status
+    await AuthorityInformation.update({ status }, { where: { id } });
+
+    // Fetch the updated employee
+    const updatedEmployee = await AuthorityInformation.findOne({
+      where: { id },
+    });
+
+    return res.status(200).json({
+      message: `Employee status updated to ${status} successfully!`,
+      data: updatedEmployee,
+    });
+  } catch (error) {
+    console.error("Error toggling employee status:", error);
+    next(error);
+  }
+};
+
+//! Delete Employee
+const deleteEmployee = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    // Check if the employee exists
+    const existingEmployee = await AuthorityInformation.findOne({
+      where: { id },
+    });
+
+    if (!existingEmployee) {
+      return res.status(404).json({
+        message: "Employee not found!",
+      });
+    }
+
+    // Delete the employee
+    await AuthorityInformation.destroy({
+      where: { id },
+    });
+
+    return res.status(200).json({
+      message: "Employee deleted successfully!",
+    });
+  } catch (error) {
+    console.error("Error deleting employee:", error);
     next(error);
   }
 };
@@ -883,195 +1239,6 @@ const getEmployeeStats = async (req, res, next) => {
   }
 };
 
-//! Get Employee by ID
-const getEmployeeById = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-
-    // Check if the employee exists
-    const employee = await AuthorityInformation.findOne({
-      where: { id },
-    });
-
-    if (!employee) {
-      return res.status(404).json({
-        message: "Employee not found!",
-      });
-    }
-
-    return res.status(200).json({
-      message: "Employee data retrieved successfully!",
-      data: employee,
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-//! Update Employee
-const updateEmployee = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const {
-      address,
-      age,
-      bloodGroup,
-      dateOfBirth,
-      email,
-      photo,
-      fatherOrSpouseName,
-      fullName,
-      jobCategory,
-      jobType,
-      maritalStatus,
-      mobileNo,
-      nidOrPassportNo,
-      religion,
-      role,
-      sex,
-      baseSalary,
-      status,
-      password,
-    } = req.body;
-
-    // Check if the employee exists
-    const existingEmployee = await AuthorityInformation.findOne({
-      where: { id },
-    });
-
-    if (!existingEmployee) {
-      return res.status(404).json({
-        message: "Employee not found!",
-      });
-    }
-
-    // Check if the new email already exists (if email is being updated)
-    if (email && email !== existingEmployee.email) {
-      const emailExists = await AuthorityInformation.findOne({
-        where: { email },
-      });
-      if (emailExists) {
-        return res.status(409).json({
-          message: "This email already exists! Try a different one.",
-        });
-      }
-    }
-
-    // Prepare update data
-    const updateData = {
-      address: address || existingEmployee.address,
-      age: parseInt(age) || existingEmployee.age,
-      bloodGroup: bloodGroup || existingEmployee.bloodGroup,
-      dateOfBirth: dateOfBirth || existingEmployee.dateOfBirth,
-      email: email || existingEmployee.email,
-      fatherOrSpouseName:
-        fatherOrSpouseName || existingEmployee.fatherOrSpouseName,
-      fullName: fullName || existingEmployee.fullName,
-      jobCategory: jobCategory || existingEmployee.jobCategory,
-      jobType: jobType || existingEmployee.jobType,
-      maritalStatus: maritalStatus || existingEmployee.maritalStatus,
-      mobileNo: mobileNo || existingEmployee.mobileNo,
-      nidOrPassportNo: nidOrPassportNo || existingEmployee.nidOrPassportNo,
-      religion: religion || existingEmployee.religion,
-      role: role || existingEmployee.role,
-      sex: sex || existingEmployee.sex,
-      baseSalary: parseFloat(baseSalary) || existingEmployee.baseSalary,
-      status: status || existingEmployee.status,
-      photo: photo || existingEmployee.photo,
-      password: password || existingEmployee.password,
-    };
-
-    // Update the employee
-    await AuthorityInformation.update(updateData, {
-      where: { id },
-    });
-
-    // Fetch the updated employee data
-    const updatedEmployee = await AuthorityInformation.findOne({
-      where: { id },
-    });
-
-    return res.status(200).json({
-      message: "Employee information updated successfully!",
-      data: updatedEmployee,
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-//! Toggle Employee Status
-const toggleEmployeeStatus = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const { status } = req.body;
-
-    // Validate status
-    const validStatuses = ["active", "inactive", "pending"];
-    if (!status || !validStatuses.includes(status)) {
-      return res.status(400).json({
-        message:
-          "Invalid status! Status must be one of: active, inactive, pending",
-      });
-    }
-
-    // Check if the employee exists
-    const employee = await AuthorityInformation.findOne({
-      where: { id },
-    });
-
-    if (!employee) {
-      return res.status(404).json({
-        message: "Employee not found!",
-      });
-    }
-
-    // Update the status
-    await AuthorityInformation.update({ status }, { where: { id } });
-
-    // Fetch the updated employee
-    const updatedEmployee = await AuthorityInformation.findOne({
-      where: { id },
-    });
-
-    return res.status(200).json({
-      message: `Employee status updated to ${status} successfully!`,
-      data: updatedEmployee,
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-//! Delete Employee
-const deleteEmployee = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-
-    // Check if the employee exists
-    const existingEmployee = await AuthorityInformation.findOne({
-      where: { id },
-    });
-
-    if (!existingEmployee) {
-      return res.status(404).json({
-        message: "Employee not found!",
-      });
-    }
-
-    // Delete the employee
-    await AuthorityInformation.destroy({
-      where: { id },
-    });
-
-    return res.status(200).json({
-      message: "Employee deleted successfully!",
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
 //! Search Employees Advanced
 const searchEmployeeAdvanced = async (req, res, next) => {
   try {
@@ -1098,6 +1265,9 @@ const searchEmployeeAdvanced = async (req, res, next) => {
         { userId: { [Op.like]: `%${searchQuery}%` } },
         { nidOrPassportNo: { [Op.like]: `%${searchQuery}%` } },
         { role: { [Op.like]: `%${searchQuery}%` } },
+        // Search in reference fields
+        { joinedThroughName: { [Op.like]: `%${searchQuery}%` } },
+        { emergencyContactName: { [Op.like]: `%${searchQuery}%` } },
       ],
     };
 
@@ -1110,12 +1280,51 @@ const searchEmployeeAdvanced = async (req, res, next) => {
         order: [["fullName", "ASC"]],
       });
 
+    // Format employees data
+    const formattedEmployees = employees.map((employee) => ({
+      id: employee.id,
+      userId: employee.userId,
+      fullName: employee.fullName,
+      email: employee.email,
+      photo: employee.photo,
+      mobileNo: employee.mobileNo,
+      role: employee.role,
+      status: employee.status,
+      fatherOrSpouseName: employee.fatherOrSpouseName,
+      dateOfBirth: employee.dateOfBirth,
+      age: employee.age,
+      sex: employee.sex,
+      maritalStatus: employee.maritalStatus,
+      nidOrPassportNo: employee.nidOrPassportNo,
+      bloodGroup: employee.bloodGroup,
+      religion: employee.religion,
+      jobCategory: employee.jobCategory,
+      jobType: employee.jobType,
+      address: employee.address,
+      baseSalary: employee.baseSalary,
+      joinedThrough: {
+        name: employee.joinedThroughName,
+        mobileNo: employee.joinedThroughMobileNo,
+        relation: employee.joinedThroughRelation,
+        address: employee.joinedThroughAddress,
+      },
+      emergencyContact: {
+        name: employee.emergencyContactName,
+        mobileNo: employee.emergencyContactMobileNo,
+        relation: employee.emergencyContactRelation,
+        address: employee.emergencyContactAddress,
+      },
+      references: employee.additionalReferences || [],
+      createdAt: employee.createdAt,
+      updatedAt: employee.updatedAt,
+    }));
+
     // Calculate total pages
     const totalPages = Math.ceil(count / limitNumber);
 
     return res.status(200).json({
       message: "Employees retrieved successfully!",
-      data: employees,
+      data: formattedEmployees,
       searchQuery: searchQuery,
       pagination: {
         totalItems: count,
@@ -1151,84 +1360,54 @@ const getEmployeeByUserId = async (req, res, next) => {
       });
     }
 
+    // Format employee data
+    const formattedEmployee = {
+      id: employee.id,
+      userId: employee.userId,
+      fullName: employee.fullName,
+      email: employee.email,
+      photo: employee.photo,
+      mobileNo: employee.mobileNo,
+      role: employee.role,
+      status: employee.status,
+      fatherOrSpouseName: employee.fatherOrSpouseName,
+      dateOfBirth: employee.dateOfBirth,
+      age: employee.age,
+      sex: employee.sex,
+      maritalStatus: employee.maritalStatus,
+      nidOrPassportNo: employee.nidOrPassportNo,
+      bloodGroup: employee.bloodGroup,
+      religion: employee.religion,
+      jobCategory: employee.jobCategory,
+      jobType: employee.jobType,
+      address: employee.address,
+      baseSalary: employee.baseSalary,
+      joinedThrough: {
+        name: employee.joinedThroughName,
+        mobileNo: employee.joinedThroughMobileNo,
+        relation: employee.joinedThroughRelation,
+        address: employee.joinedThroughAddress,
+      },
+      emergencyContact: {
+        name: employee.emergencyContactName,
+        mobileNo: employee.emergencyContactMobileNo,
+        relation: employee.emergencyContactRelation,
+        address: employee.emergencyContactAddress,
+      },
+      references: employee.additionalReferences || [],
+      createdAt: employee.createdAt,
+      updatedAt: employee.updatedAt,
+    };
+
     return res.status(200).json({
       message: "Employee data retrieved successfully!",
-      data: employee,
+      data: formattedEmployee,
     });
   } catch (error) {
     console.error("Get by userId error:", error);
     next(error);
   }
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 //! Check user credentials (login) - Simplified version
 const checkUserCredentials = async (req, res, next) => {

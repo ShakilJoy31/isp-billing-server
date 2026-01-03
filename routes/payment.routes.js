@@ -1,6 +1,6 @@
 const express = require("express");
 const { createTransaction, getTransactionsByUserId, updateTransactionStatus, getAllTransactions, getTransactionById, getTransactionStats, bulkUpdateTransactionStatus } = require("../controller/payment/client-payment.controller");
-const { createEmployeePayment, getPaymentsByEmployee, getTodaysCollections, searchClientForPayment, getClientPaymentHistory, getEmployeeCollectionStats, getPaymentDetails, verifyPayment, getAllEmployeeCollections, markAsDeposited, getAllEmployeeCollectionStats, getAllEmployeePerformanceStats, updateEmployeePayment } = require("../controller/payment/employee-payment.controller");
+const { createEmployeePayment, getPaymentsByEmployee, getTodaysCollections, searchClientForPayment, getClientPaymentHistory, getEmployeeCollectionStats, getPaymentDetails, verifyPayment, getAllEmployeeCollections, markAsDeposited, getAllEmployeeCollectionStats, getAllEmployeePerformanceStats, updateEmployeePayment, deleteCollectedBillBySuperAdmin, getClientPaidMonthsHistory } = require("../controller/payment/employee-payment.controller");
 const router = express.Router();
 
 
@@ -33,15 +33,13 @@ router.get("/collection-stats/:employeeId", getEmployeeCollectionStats);
 router.get("/payment-details/:paymentId", getPaymentDetails);
 router.put("/update-payment/:paymentId", updateEmployeePayment);
 
-// Admin routes
+//! Super Admin routes
 router.get("/all-collections", getAllEmployeeCollections);
 router.put("/verify-payment/:paymentId", verifyPayment);
 router.put("/mark-deposited/:paymentId", markAsDeposited);
-
-
-// Super Admin routes
 router.get("/collection-stats-for-super-admin", getAllEmployeeCollectionStats); // Added this
 router.get("/employee-performance", getAllEmployeePerformanceStats); // Added this
+router.delete("/delete-collected-bill-by-super-admin/:id", deleteCollectedBillBySuperAdmin)
 
 
 

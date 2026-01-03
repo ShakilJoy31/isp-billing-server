@@ -125,11 +125,11 @@ const createEmployeePayment = async (req, res) => {
     // First, get the user's actual ID from the User table
     const user = await ClientInformation.findOne({
       where: { userId: clientUserId },
-      attributes: ['id']
+      attributes: ["id"],
     });
 
     let existingClientTransaction = null;
-    
+
     if (user) {
       // Now query Transaction table with the numeric user ID
       existingClientTransaction = await Transaction.findOne({
@@ -156,9 +156,9 @@ const createEmployeePayment = async (req, res) => {
             trxId: existingClientTransaction.trxId,
             billingMonth: existingClientTransaction.billingMonth,
             billingYear: existingClientTransaction.billingYear,
-            createdAt: existingClientTransaction.createdAt
-          }
-        }
+            createdAt: existingClientTransaction.createdAt,
+          },
+        },
       });
     }
 
@@ -281,7 +281,7 @@ const createEmployeePayment = async (req, res) => {
   }
 };
 
-// 2. Get Payments by Employee
+//! 2. Get Payments by Employee
 const getPaymentsByEmployee = async (req, res) => {
   try {
     const { employeeId } = req.params;
@@ -379,7 +379,7 @@ const getPaymentsByEmployee = async (req, res) => {
   }
 };
 
-// Add this to your controller file
+//! Add this to your controller file
 const updateEmployeePayment = async (req, res) => {
   try {
     const { paymentId } = req.params;
@@ -422,7 +422,7 @@ const updateEmployeePayment = async (req, res) => {
   }
 };
 
-// 3. Get Payment Details
+//! 3. Get Payment Details
 const getPaymentDetails = async (req, res) => {
   try {
     const { paymentId } = req.params;
@@ -451,7 +451,7 @@ const getPaymentDetails = async (req, res) => {
   }
 };
 
-// 4. Get Today's Collections
+//! 4. Get Today's Collections
 const getTodaysCollections = async (req, res) => {
   try {
     const { employeeId } = req.params;
@@ -507,7 +507,7 @@ const getTodaysCollections = async (req, res) => {
   }
 };
 
-// 5. Search Client for Payment
+//! 5. Search Client for Payment
 const searchClientForPayment = async (req, res) => {
   try {
     const { search } = req.query;
@@ -534,6 +534,7 @@ const searchClientForPayment = async (req, res) => {
         "userId",
         "customerId",
         "fullName",
+        "id",
         "mobileNo",
         "email",
         "package", // This stores the package ID
@@ -545,7 +546,6 @@ const searchClientForPayment = async (req, res) => {
       ],
     });
 
-    // Get unique package IDs from all clients
     const packageIds = [
       ...new Set(
         clients
@@ -554,8 +554,6 @@ const searchClientForPayment = async (req, res) => {
           .map((id) => parseInt(id)) // Convert string to number
       ),
     ];
-
-    console.log("Package IDs found:", packageIds);
 
     // Fetch all packages in one query
     let packages = [];
@@ -628,7 +626,7 @@ const searchClientForPayment = async (req, res) => {
   }
 };
 
-// 6. Get Client Payment History
+//! 6. Get Client Payment History
 const getClientPaymentHistory = async (req, res) => {
   try {
     const { clientUserId } = req.params;
@@ -826,7 +824,7 @@ const getAllEmployeeCollections = async (req, res) => {
   }
 };
 
-// 8. Verify Payment (Admin/Supervisor)
+//! 8. Verify Payment (Admin/Supervisor)
 const verifyPayment = async (req, res) => {
   try {
     const { paymentId } = req.params;
@@ -882,7 +880,7 @@ const verifyPayment = async (req, res) => {
   }
 };
 
-// 9. Mark as Deposited (Finance)
+//! 9. Mark as Deposited (Finance)
 const markAsDeposited = async (req, res) => {
   try {
     const { paymentId } = req.params;
@@ -936,7 +934,7 @@ const markAsDeposited = async (req, res) => {
   }
 };
 
-// 10. Get Employee Collection Stats
+//! 10. Get Employee Collection Stats
 const getEmployeeCollectionStats = async (req, res) => {
   try {
     const { employeeId } = req.params;
@@ -1513,6 +1511,30 @@ const getAllEmployeePerformanceStats = async (req, res) => {
   }
 };
 
+const deleteCollectedBillBySuperAdmin = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const billToDelete = await EmployeePayment.findByPk(id);
+
+    if (!billToDelete) {
+      return res.status(404).json({
+        success: false,
+        message: "Bill not found!",
+      });
+    }
+
+    await billToDelete.destroy();
+
+    return res.status(200).json({
+      success: true,
+      message: "Bill deleted successfully!",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createEmployeePayment,
   getPaymentsByEmployee,
@@ -1527,4 +1549,5 @@ module.exports = {
   getAllEmployeePerformanceStats,
   getAllEmployeeCollectionStats,
   updateEmployeePayment,
+  deleteCollectedBillBySuperAdmin,
 };

@@ -4,9 +4,8 @@ const sequelize = require("../../database/connection");
 const AuthorityInformation = sequelize.define("authority-information", {
   id: {
     type: dt.INTEGER,
-    autoIncrement: true,
-    unique: true,
     primaryKey: true,
+    autoIncrement: true,
   },
   address: {
     type: dt.STRING,
@@ -95,6 +94,43 @@ const AuthorityInformation = sequelize.define("authority-information", {
     type: dt.DECIMAL(10, 2),
     allowNull: true,
     defaultValue: 0.00,
+  },
+  
+  // New fields for reference information
+  joinedThroughName: {
+    type: dt.STRING,
+    allowNull: false,
+  },
+  joinedThroughMobileNo: {
+    type: dt.STRING,
+    allowNull: false,
+  },
+  joinedThroughRelation: {
+    type: dt.STRING,
+    allowNull: false,
+  },
+  joinedThroughAddress: {
+    type: dt.STRING,
+    allowNull: true,
+    defaultValue: '',
+  },
+  
+  emergencyContactName: {
+    type: dt.STRING,
+    allowNull: false,
+  },
+  emergencyContactMobileNo: {
+    type: dt.STRING,
+    allowNull: false,
+  },
+  emergencyContactRelation: {
+    type: dt.STRING,
+    allowNull: false,
+  },
+  emergencyContactAddress: {
+    type: dt.STRING,
+    allowNull: true,
+    defaultValue: '',
   },
   createdAt: {
     type: dt.DATE,
