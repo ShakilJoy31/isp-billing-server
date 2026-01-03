@@ -43,6 +43,7 @@ const transformClientWithPackage = async (client) => {
   return clientData;
 };
 
+
 //! Create new client
 const createClient = async (req, res, next) => {
   try {
@@ -54,6 +55,7 @@ const createClient = async (req, res, next) => {
       sex,
       maritalStatus,
       nidOrPassportNo,
+      nidPhoto, // New field for NID photos
       jobPlaceName,
       jobCategory,
       customerId,
@@ -80,10 +82,58 @@ const createClient = async (req, res, next) => {
       routerLoginPassword,
     } = req.body;
 
+    // Validate required fields
+    if (!fullName || !mobileNo || !email || !nidOrPassportNo) {
+      return res.status(400).json({
+        message: "Full name, mobile number, email, and NID/Passport number are required!",
+      });
+    }
+
+    // Check if email already exists
+    const emailExists = await ClientInformation.findOne({ where: { email } });
+    if (emailExists) {
+      return res.status(409).json({
+        message: "This email already exists!",
+      });
+    }
+
+    // Check if NID already exists
+    const nidExists = await ClientInformation.findOne({ where: { nidOrPassportNo } });
+    if (nidExists) {
+      return res.status(409).json({
+        message: "This NID/Passport number already exists!",
+      });
+    }
+
+    // Check if mobile already exists
+    const mobileExists = await ClientInformation.findOne({ where: { mobileNo } });
+    if (mobileExists) {
+      return res.status(409).json({
+        message: "This mobile number already exists!",
+      });
+    }
+
+    // Parse NID photo data
+    let nidPhotoData = {
+      frontSide: "",
+      backSide: ""
+    };
+
+    if (nidPhoto) {
+      if (typeof nidPhoto === 'string') {
+        try {
+          nidPhotoData = JSON.parse(nidPhoto);
+        } catch (error) {
+          console.log("Error parsing nidPhoto string:", error);
+        }
+      } else if (typeof nidPhoto === 'object') {
+        nidPhotoData = nidPhoto;
+      }
+    }
+
     // Generate unique IDs
     const userId = await generateUniqueUserId(fullName);
 
-    // Create new client
     const newClient = await ClientInformation.create({
       customerId,
       userId,
@@ -95,6 +145,8 @@ const createClient = async (req, res, next) => {
       sex,
       maritalStatus,
       nidOrPassportNo,
+      nidPhotoFrontSide: nidPhotoData.frontSide || "",
+      nidPhotoBackSide: nidPhotoData.backSide || "",
       jobPlaceName: jobPlaceName || null,
       jobCategory: jobCategory || null,
       jobType,
@@ -105,17 +157,16 @@ const createClient = async (req, res, next) => {
       location,
       area,
       flatAptNo,
-      isFreeClient,
+      isFreeClient: isFreeClient || false,
       houseNo,
       roadNo,
       landmark,
       connectionDetails: connectionDetails || null,
-      costForPackage,
+      costForPackage: parseInt(costForPackage) || 0,
       referId: referId || null,
-      role: role,
-      status: status,
+      role: role || "client",
+      status: status || "pending",
       password: password || mobileNo,
-      // New fields
       routerLoginId: routerLoginId || null,
       routerLoginPassword: routerLoginPassword || null,
     });
@@ -125,9 +176,16 @@ const createClient = async (req, res, next) => {
 
     return res.status(201).json({
       message: "Client created successfully!",
-      data: clientData,
+      data: {
+        ...clientData,
+        nidPhoto: {
+          frontSide: newClient.nidPhotoFrontSide,
+          backSide: newClient.nidPhotoBackSide
+        }
+      },
     });
   } catch (error) {
+    console.error("Error creating client:", error);
     next(error);
   }
 };
@@ -159,6 +217,7 @@ const getAllClients = async (req, res, next) => {
         { userId: { [Op.like]: `%${search}%` } },
         { mobileNo: { [Op.like]: `%${search}%` } },
         { email: { [Op.like]: `%${search}%` } },
+        { nidOrPassportNo: { [Op.like]: `%${search}%` } }, // Add NID to search
       ];
     }
 
@@ -180,11 +239,20 @@ const getAllClients = async (req, res, next) => {
       clients.map((client) => transformClientWithPackage(client))
     );
 
+    // Add nidPhoto to transformed clients
+    const clientsWithNidPhotos = transformedClients.map(client => ({
+      ...client,
+      nidPhoto: {
+        frontSide: client.nidPhotoFrontSide || "",
+        backSide: client.nidPhotoBackSide || ""
+      }
+    }));
+
     const totalPages = Math.ceil(count / limitNumber);
 
     return res.status(200).json({
       message: "Clients retrieved successfully!",
-      data: transformedClients,
+      data: clientsWithNidPhotos,
       pagination: {
         totalItems: count,
         totalPages: totalPages,
@@ -193,6 +261,7 @@ const getAllClients = async (req, res, next) => {
       },
     });
   } catch (error) {
+    console.error("Error getting all clients:", error);
     next(error);
   }
 };
@@ -217,9 +286,16 @@ const getClientById = async (req, res, next) => {
 
     return res.status(200).json({
       message: "Client retrieved successfully!",
-      data: clientData,
+      data: {
+        ...clientData,
+        nidPhoto: {
+          frontSide: client.nidPhotoFrontSide || "",
+          backSide: client.nidPhotoBackSide || ""
+        }
+      },
     });
   } catch (error) {
+    console.error("Error getting client by ID:", error);
     next(error);
   }
 };
@@ -237,6 +313,7 @@ const updateClient = async (req, res, next) => {
       sex,
       maritalStatus,
       nidOrPassportNo,
+      nidPhoto, // New field for NID photos
       jobPlaceName,
       jobCategory,
       jobType,
@@ -257,7 +334,6 @@ const updateClient = async (req, res, next) => {
       photo,
       status,
       password,
-      // New fields
       routerLoginId,
       routerLoginPassword,
     } = req.body;
@@ -304,39 +380,57 @@ const updateClient = async (req, res, next) => {
       }
     }
 
+    // Parse NID photo data
+    let nidPhotoData = {
+      frontSide: existingClient.nidPhotoFrontSide || "",
+      backSide: existingClient.nidPhotoBackSide || ""
+    };
+
+    if (nidPhoto) {
+      if (typeof nidPhoto === 'string') {
+        try {
+          nidPhotoData = JSON.parse(nidPhoto);
+        } catch (error) {
+          console.log("Error parsing nidPhoto string:", error);
+        }
+      } else if (typeof nidPhoto === 'object') {
+        nidPhotoData = nidPhoto;
+      }
+    }
+
     // Update client data
     const updateData = {
-      fullName,
-      fatherOrSpouseName,
-      dateOfBirth,
-      age: parseInt(age),
-      sex,
-      maritalStatus,
-      nidOrPassportNo,
-      jobPlaceName,
-      jobCategory,
-      jobType,
-      isFreeClient,
-      mobileNo,
-      customerId,
-      email,
-      customerType,
-      package, // Store the package ID
-      location,
-      area,
-      flatAptNo,
-      houseNo,
-      roadNo,
-      landmark,
-      connectionDetails,
-      costForPackage,
-      referId,
-      photo,
-      status,
-      // New fields
+      fullName: fullName || existingClient.fullName,
+      fatherOrSpouseName: fatherOrSpouseName || existingClient.fatherOrSpouseName,
+      dateOfBirth: dateOfBirth || existingClient.dateOfBirth,
+      age: parseInt(age) || existingClient.age,
+      sex: sex || existingClient.sex,
+      maritalStatus: maritalStatus || existingClient.maritalStatus,
+      nidOrPassportNo: nidOrPassportNo || existingClient.nidOrPassportNo,
+      nidPhotoFrontSide: nidPhotoData.frontSide || existingClient.nidPhotoFrontSide || "",
+      nidPhotoBackSide: nidPhotoData.backSide || existingClient.nidPhotoBackSide || "",
+      jobPlaceName: jobPlaceName || existingClient.jobPlaceName,
+      jobCategory: jobCategory || existingClient.jobCategory,
+      jobType: jobType || existingClient.jobType,
+      isFreeClient: isFreeClient !== undefined ? isFreeClient : existingClient.isFreeClient,
+      mobileNo: mobileNo || existingClient.mobileNo,
+      customerId: customerId || existingClient.customerId,
+      email: email || existingClient.email,
+      customerType: customerType || existingClient.customerType,
+      package: package || existingClient.package, // Store the package ID
+      location: location || existingClient.location,
+      area: area || existingClient.area,
+      flatAptNo: flatAptNo || existingClient.flatAptNo,
+      houseNo: houseNo || existingClient.houseNo,
+      roadNo: roadNo || existingClient.roadNo,
+      landmark: landmark || existingClient.landmark,
+      connectionDetails: connectionDetails || existingClient.connectionDetails,
+      costForPackage: parseInt(costForPackage) || existingClient.costForPackage,
+      referId: referId || existingClient.referId,
+      photo: photo || existingClient.photo,
+      status: status || existingClient.status,
       routerLoginId: routerLoginId || existingClient.routerLoginId,
-      routerLoginPassword:
-        routerLoginPassword || existingClient.routerLoginPassword,
+      routerLoginPassword: routerLoginPassword || existingClient.routerLoginPassword,
     };
 
     // Update password if provided
@@ -359,9 +453,16 @@ const updateClient = async (req, res, next) => {
 
     return res.status(200).json({
       message: "Client updated successfully!",
-      data: clientData,
+      data: {
+        ...clientData,
+        nidPhoto: {
+          frontSide: updatedClient.nidPhotoFrontSide || "",
+          backSide: updatedClient.nidPhotoBackSide || ""
+        }
+      },
     });
   } catch (error) {
+    console.error("Error updating client:", error);
     next(error);
   }
 };
@@ -384,6 +485,7 @@ const deleteClient = async (req, res, next) => {
       message: "Client deleted successfully!",
     });
   } catch (error) {
+    console.error("Error deleting client:", error);
     next(error);
   }
 };
@@ -417,11 +519,20 @@ const getClientsByReferCode = async (req, res, next) => {
       clients.map((client) => transformClientWithPackage(client))
     );
 
+    // Add nidPhoto to transformed clients
+    const clientsWithNidPhotos = transformedClients.map(client => ({
+      ...client,
+      nidPhoto: {
+        frontSide: client.nidPhotoFrontSide || "",
+        backSide: client.nidPhotoBackSide || ""
+      }
+    }));
+
     const totalPages = Math.ceil(count / limitNumber);
 
     return res.status(200).json({
       message: "Clients retrieved successfully!",
-      data: transformedClients,
+      data: clientsWithNidPhotos,
       pagination: {
         totalItems: count,
         totalPages: totalPages,
@@ -430,6 +541,7 @@ const getClientsByReferCode = async (req, res, next) => {
       },
     });
   } catch (error) {
+    console.error("Error getting clients by refer code:", error);
     next(error);
   }
 };
@@ -460,9 +572,16 @@ const updateClientStatus = async (req, res, next) => {
 
     return res.status(200).json({
       message: `Client ${status} successfully!`,
-      data: clientData,
+      data: {
+        ...clientData,
+        nidPhoto: {
+          frontSide: updatedClient.nidPhotoFrontSide || "",
+          backSide: updatedClient.nidPhotoBackSide || ""
+        }
+      },
     });
   } catch (error) {
+    console.error("Error updating client status:", error);
     next(error);
   }
 };
@@ -618,6 +737,42 @@ const generateUniqueEmployeeId = async (fullName) => {
   }
 };
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 //! Create Authority/Employee
 const createAuthority = async (req, res, next) => {
   try {
@@ -635,6 +790,7 @@ const createAuthority = async (req, res, next) => {
       maritalStatus,
       mobileNo,
       nidOrPassportNo,
+      nidPhoto, // New field for NID photos
       religion,
       role,
       sex,
@@ -647,10 +803,10 @@ const createAuthority = async (req, res, next) => {
     } = req.body;
 
     // Validate required fields
-    if (!fullName || !email || !mobileNo || !role || !dateOfBirth) {
+    if (!fullName || !email || !mobileNo || !role || !dateOfBirth || !nidOrPassportNo) {
       return res.status(400).json({
         message:
-          "Full name, email, mobile number, role, and date of birth are required!",
+          "Full name, email, mobile number, role, date of birth, and NID/Passport number are required!",
       });
     }
 
@@ -703,6 +859,24 @@ const createAuthority = async (req, res, next) => {
     
     const nextId = (maxIdResult?.maxId || 0) + 1;
 
+    // Parse NID photo data
+    let nidPhotoData = {
+      frontSide: "",
+      backSide: ""
+    };
+
+    if (nidPhoto) {
+      if (typeof nidPhoto === 'string') {
+        try {
+          nidPhotoData = JSON.parse(nidPhoto);
+        } catch (error) {
+          console.log("Error parsing nidPhoto string:", error);
+        }
+      } else if (typeof nidPhoto === 'object') {
+        nidPhotoData = nidPhoto;
+      }
+    }
+
     // Create a new employee with explicit ID
     const newEntry = await AuthorityInformation.create({
       id: nextId, // Explicitly set the ID
@@ -719,6 +893,8 @@ const createAuthority = async (req, res, next) => {
       maritalStatus,
       mobileNo,
       nidOrPassportNo,
+      nidPhotoFrontSide: nidPhotoData.frontSide || "",
+      nidPhotoBackSide: nidPhotoData.backSide || "",
       religion: religion || "",
       role,
       sex,
@@ -742,7 +918,13 @@ const createAuthority = async (req, res, next) => {
 
     return res.status(201).json({
       message: "Employee created successfully!",
-      data: newEntry,
+      data: {
+        ...newEntry.toJSON(),
+        nidPhoto: {
+          frontSide: newEntry.nidPhotoFrontSide,
+          backSide: newEntry.nidPhotoBackSide
+        }
+      },
     });
   } catch (error) {
     console.log("Error creating employee:", error);
@@ -788,6 +970,7 @@ const getAllAuthorities = async (req, res, next) => {
         { email: { [Op.like]: `%${search}%` } },
         { mobileNo: { [Op.like]: `%${search}%` } },
         { userId: { [Op.like]: `%${search}%` } },
+        { nidOrPassportNo: { [Op.like]: `%${search}%` } },
       ];
     }
 
@@ -831,6 +1014,10 @@ const getAllAuthorities = async (req, res, next) => {
       sex: employee.sex,
       maritalStatus: employee.maritalStatus,
       nidOrPassportNo: employee.nidOrPassportNo,
+      nidPhoto: { // Include NID photos
+        frontSide: employee.nidPhotoFrontSide || "",
+        backSide: employee.nidPhotoBackSide || ""
+      },
       bloodGroup: employee.bloodGroup,
       religion: employee.religion,
       jobCategory: employee.jobCategory,
@@ -906,6 +1093,10 @@ const getEmployeeById = async (req, res, next) => {
       sex: employee.sex,
       maritalStatus: employee.maritalStatus,
       nidOrPassportNo: employee.nidOrPassportNo,
+      nidPhoto: { // Include NID photos
+        frontSide: employee.nidPhotoFrontSide || "",
+        backSide: employee.nidPhotoBackSide || ""
+      },
       bloodGroup: employee.bloodGroup,
       religion: employee.religion,
       jobCategory: employee.jobCategory,
@@ -958,6 +1149,7 @@ const updateEmployee = async (req, res, next) => {
       maritalStatus,
       mobileNo,
       nidOrPassportNo,
+      nidPhoto, // New field for NID photos
       religion,
       role,
       sex,
@@ -993,6 +1185,24 @@ const updateEmployee = async (req, res, next) => {
       }
     }
 
+    // Parse NID photo data
+    let nidPhotoData = {
+      frontSide: existingEmployee.nidPhotoFrontSide || "",
+      backSide: existingEmployee.nidPhotoBackSide || ""
+    };
+
+    if (nidPhoto) {
+      if (typeof nidPhoto === 'string') {
+        try {
+          nidPhotoData = JSON.parse(nidPhoto);
+        } catch (error) {
+          console.log("Error parsing nidPhoto string:", error);
+        }
+      } else if (typeof nidPhoto === 'object') {
+        nidPhotoData = nidPhoto;
+      }
+    }
+
     // Prepare references data
     let additionalReferences = existingEmployee.additionalReferences || [];
     if (Array.isArray(references)) {
@@ -1019,6 +1229,8 @@ const updateEmployee = async (req, res, next) => {
       maritalStatus: maritalStatus || existingEmployee.maritalStatus,
       mobileNo: mobileNo || existingEmployee.mobileNo,
       nidOrPassportNo: nidOrPassportNo || existingEmployee.nidOrPassportNo,
+      nidPhotoFrontSide: nidPhotoData.frontSide || existingEmployee.nidPhotoFrontSide || "",
+      nidPhotoBackSide: nidPhotoData.backSide || existingEmployee.nidPhotoBackSide || "",
       religion: religion || existingEmployee.religion,
       role: role || existingEmployee.role,
       sex: sex || existingEmployee.sex,
@@ -1075,6 +1287,10 @@ const updateEmployee = async (req, res, next) => {
       sex: updatedEmployee.sex,
       maritalStatus: updatedEmployee.maritalStatus,
       nidOrPassportNo: updatedEmployee.nidOrPassportNo,
+      nidPhoto: { // Include NID photos
+        frontSide: updatedEmployee.nidPhotoFrontSide || "",
+        backSide: updatedEmployee.nidPhotoBackSide || ""
+      },
       bloodGroup: updatedEmployee.bloodGroup,
       religion: updatedEmployee.religion,
       jobCategory: updatedEmployee.jobCategory,
@@ -1107,6 +1323,20 @@ const updateEmployee = async (req, res, next) => {
     next(error);
   }
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 //! Toggle Employee Status
 const toggleEmployeeStatus = async (req, res, next) => {

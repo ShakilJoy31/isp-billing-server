@@ -51,6 +51,18 @@ const ClientInformation = sequelize.define(
     nidOrPassportNo: {
       type: dt.STRING,
       allowNull: false,
+      unique: true,
+    },
+    // New fields for NID photos
+    nidPhotoFrontSide: {
+      type: dt.STRING,
+      allowNull: true,
+      defaultValue: "",
+    },
+    nidPhotoBackSide: {
+      type: dt.STRING,
+      allowNull: true,
+      defaultValue: "",
     },
     isFreeClient: {
       type: dt.BOOLEAN,
@@ -72,10 +84,12 @@ const ClientInformation = sequelize.define(
     mobileNo: {
       type: dt.STRING,
       allowNull: false,
+      unique: true,
     },
     email: {
       type: dt.STRING,
       allowNull: false,
+      unique: true,
     },
     customerType: {
       type: dt.STRING,
@@ -135,7 +149,6 @@ const ClientInformation = sequelize.define(
       type: dt.STRING,
       allowNull: false,
     },
-    // New fields
     routerLoginId: {
       type: dt.STRING,
       allowNull: true,

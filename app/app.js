@@ -4,7 +4,7 @@ const app = express();
 const { notFoundHandler, errorHandler } = require("./error");
 const middlewares = require("./middlewares");
 const apiRoutes = require("./api.routes");
-const passportConfig = require("./passport")
+const passportConfig = require("./passport");
 
 
 app.use(passportConfig)

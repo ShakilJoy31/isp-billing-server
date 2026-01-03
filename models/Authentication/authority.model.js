@@ -31,8 +31,8 @@ const AuthorityInformation = sequelize.define("authority-information", {
   },
   photo: {
     type: dt.STRING,
-    allowNull: false,
-    unique: true,
+    allowNull: true,
+    defaultValue: '/default-avatar.png',
   },
   fatherOrSpouseName: {
     type: dt.STRING,
@@ -50,6 +50,7 @@ const AuthorityInformation = sequelize.define("authority-information", {
   jobType: {
     type: dt.STRING,
     allowNull: false,
+    defaultValue: 'Full Time',
   },
   maritalStatus: {
     type: dt.STRING,
@@ -62,6 +63,17 @@ const AuthorityInformation = sequelize.define("authority-information", {
   nidOrPassportNo: {
     type: dt.STRING,
     allowNull: false,
+  },
+  // New fields for NID photos
+  nidPhotoFrontSide: {
+    type: dt.STRING,
+    allowNull: true,
+    defaultValue: '',
+  },
+  nidPhotoBackSide: {
+    type: dt.STRING,
+    allowNull: true,
+    defaultValue: '',
   },
   religion: {
     type: dt.STRING,

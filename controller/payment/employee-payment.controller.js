@@ -385,6 +385,8 @@ const updateEmployeePayment = async (req, res) => {
     const { paymentId } = req.params;
     const updateData = req.body;
 
+    console.log("Update request received:", { paymentId, updateData }); // Add logging
+
     const payment = await EmployeePayment.findByPk(paymentId);
 
     if (!payment) {
@@ -402,8 +404,29 @@ const updateEmployeePayment = async (req, res) => {
       });
     }
 
-    // Update payment
-    await payment.update(updateData);
+    // Create a safe update object that excludes fields that shouldn't be changed
+    const safeUpdateData = { ...updateData };
+    
+    // Remove fields that shouldn't be updated
+    delete safeUpdateData.employeeId; // Don't change who collected it
+    delete safeUpdateData.clientId; // Don't change who paid it
+    delete safeUpdateData.clientUserId; // This is probably the same as clientId
+    delete safeUpdateData.receiptNumber; // Don't change receipt number
+    delete safeUpdateData.collectionDate; // Don't change collection date
+    delete safeUpdateData.collectionTime; // Don't change collection time
+    delete safeUpdateData.employeeName; // This depends on employeeId
+    delete safeUpdateData.clientName; // This depends on clientId
+    delete safeUpdateData.clientPhone; // This depends on clientId
+    delete safeUpdateData.clientAddress; // This depends on clientId
+    
+    // Only allow updating these fields:
+    // - billingMonth, amount, paymentMethod, transactionId, referenceNote, notes, attachment
+    // - Also handle any client information updates if client changed (but that's complex)
+
+    console.log("Safe update data:", safeUpdateData); // Add logging
+
+    // Update payment with safe data
+    await payment.update(safeUpdateData);
 
     const updatedPayment = await EmployeePayment.findByPk(paymentId);
 
