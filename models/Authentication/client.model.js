@@ -30,7 +30,7 @@ const ClientInformation = sequelize.define(
     },
     fatherOrSpouseName: {
       type: dt.STRING,
-      allowNull: false,
+      allowNull: true,
     },
     dateOfBirth: {
       type: dt.DATE,
@@ -38,20 +38,19 @@ const ClientInformation = sequelize.define(
     },
     age: {
       type: dt.INTEGER,
-      allowNull: false,
+      allowNull: true,
     },
     sex: {
       type: dt.STRING,
-      allowNull: false,
+      allowNull: true,
     },
     maritalStatus: {
       type: dt.STRING,
-      allowNull: false,
+      allowNull: true,
     },
     nidOrPassportNo: {
       type: dt.STRING,
-      allowNull: false,
-      unique: true,
+      allowNull: true,
     },
     // New fields for NID photos
     nidPhotoFrontSide: {
@@ -79,7 +78,7 @@ const ClientInformation = sequelize.define(
     },
     jobType: {
       type: dt.STRING,
-      allowNull: false,
+      allowNull: true,
     },
     mobileNo: {
       type: dt.STRING,
@@ -93,35 +92,35 @@ const ClientInformation = sequelize.define(
     },
     customerType: {
       type: dt.STRING,
-      allowNull: false,
+      allowNull: true,
     },
     package: {
       type: dt.STRING,
-      allowNull: false,
+      allowNull: true,
     },
     location: {
       type: dt.STRING,
-      allowNull: false,
+      allowNull: true,
     },
     area: {
       type: dt.STRING,
-      allowNull: false,
+      allowNull: true,
     },
     flatAptNo: {
       type: dt.STRING,
-      allowNull: false,
+      allowNull: true,
     },
     houseNo: {
       type: dt.STRING,
-      allowNull: false,
+      allowNull: true,
     },
     roadNo: {
       type: dt.STRING,
-      allowNull: false,
+      allowNull: true,
     },
     landmark: {
       type: dt.STRING,
-      allowNull: false,
+      allowNull: true,
     },
     connectionDetails: {
       type: dt.TEXT,

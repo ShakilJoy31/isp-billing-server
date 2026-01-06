@@ -60,6 +60,12 @@ const EmployeePayment = sequelize.define(
       type: dt.DECIMAL(10, 2),
       allowNull: false,
     },
+    discount: {
+      type: dt.DECIMAL(10, 2),
+      allowNull: true,
+      defaultValue: 0,
+    },
+    
 
     // Payment Method
     paymentMethod: {

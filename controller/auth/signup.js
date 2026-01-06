@@ -207,8 +207,9 @@ const getAllClients = async (req, res, next) => {
     const limitNumber = parseInt(limit, 10);
     const offset = (pageNumber - 1) * limitNumber;
 
-    // Build where clause
-    const whereClause = {};
+    const whereClause = {
+      role: 'client' 
+    };
 
     if (search) {
       whereClause[Op.or] = [
@@ -217,7 +218,7 @@ const getAllClients = async (req, res, next) => {
         { userId: { [Op.like]: `%${search}%` } },
         { mobileNo: { [Op.like]: `%${search}%` } },
         { email: { [Op.like]: `%${search}%` } },
-        { nidOrPassportNo: { [Op.like]: `%${search}%` } }, // Add NID to search
+        { nidOrPassportNo: { [Op.like]: `%${search}%` } },
       ];
     }
 
@@ -1642,19 +1643,19 @@ const getEmployeeByUserId = async (req, res, next) => {
 //! Check user credentials (login) - Simplified version
 const checkUserCredentials = async (req, res, next) => {
   try {
-    const { userId, password } = req.body;
+    const { email, password } = req.body;
 
-    // Check if userId and password are provided
-    if (!userId || !password) {
+    // Check if email and password are provided
+    if (!email || !password) {
       return res.status(400).json({
         success: false,
-        message: "Both userId and password are required.",
+        message: "Both email and password are required.",
       });
     }
 
-    // Find the user by userId in ClientInformation table with password
+    // Find the user by email in ClientInformation table with password
     let user = await ClientInformation.findOne({
-      where: { userId },
+      where: { email },
     });
 
     let userType = "client";
@@ -1662,7 +1663,7 @@ const checkUserCredentials = async (req, res, next) => {
     // If user is not found in ClientInformation, search in AuthorityInformation
     if (!user) {
       user = await AuthorityInformation.findOne({
-        where: { userId },
+        where: { email },
       });
       userType = "authority";
 
@@ -1670,7 +1671,7 @@ const checkUserCredentials = async (req, res, next) => {
       if (!user) {
         return res.status(404).json({
           success: false,
-          message: "User not found. Please check your userId.",
+          message: "User not found. Please check your email address.",
         });
       }
     }

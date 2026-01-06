@@ -40,6 +40,7 @@ const createEmployeePayment = async (req, res) => {
       clientUserId,
       billingMonth,
       amount,
+      discount,
       paymentMethod,
       transactionId,
       referenceNote,
@@ -225,6 +226,7 @@ const createEmployeePayment = async (req, res) => {
       billingMonth: formattedBillingMonth, // Store formatted version like "January 2025"
       billingYear: billingYear, // Store year separately
       amount: parseFloat(amount),
+      discount: parseFloat(discount) || 0,
 
       // Payment Method
       paymentMethod: paymentMethod || "cash",
@@ -256,6 +258,7 @@ const createEmployeePayment = async (req, res) => {
         number: receiptNumber,
         clientName: client.fullName,
         amount: amount,
+        discount: discount || 0,
         date: new Date(),
         collectedBy: employee.fullName,
         billingPeriod: formattedBillingMonth,
@@ -551,6 +554,8 @@ const searchClientForPayment = async (req, res) => {
           { mobileNo: { [Op.like]: `%${search}%` } },
           { nidOrPassportNo: { [Op.like]: `%${search}%` } },
         ],
+        status: 'active',
+        role: "client",
       },
       limit: 20, // Fixed: Reduced from 2,000,000 for performance
       attributes: [

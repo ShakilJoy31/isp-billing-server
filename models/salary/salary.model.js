@@ -186,7 +186,7 @@ const Salary = sequelize.define(
     },
   },
   {
-    tableName: "salaries",
+    tableName: "salary_assignments",
     timestamps: true,
     hooks: {
       beforeValidate: (salary) => {
