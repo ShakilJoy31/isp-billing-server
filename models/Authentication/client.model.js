@@ -134,6 +134,10 @@ const ClientInformation = sequelize.define(
       type: dt.STRING,
       allowNull: true,
     },
+    userAddedBy: {
+      type: dt.STRING,
+      allowNull: true,
+    },
     role: {
       type: dt.STRING,
       allowNull: false,

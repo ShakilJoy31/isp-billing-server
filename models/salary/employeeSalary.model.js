@@ -12,7 +12,6 @@ const Salary = sequelize.define("salary", {
   employeeId: {
     type: dt.STRING,
     allowNull: false,
-    unique: true, // This already creates an index
     references: {
       model: AuthorityInformation,
       key: 'userId'
@@ -41,48 +40,48 @@ const Salary = sequelize.define("salary", {
     allowNull: true,
   },
   
-  // Earnings
+  // Earnings - Use INTEGER for exact calculations
   basicSalary: {
-    type: dt.DECIMAL(10, 2),
+    type: dt.INTEGER,
     allowNull: false,
-    defaultValue: 0.00,
+    defaultValue: 0,
   },
   houseRent: {
-    type: dt.DECIMAL(10, 2),
+    type: dt.INTEGER,
     allowNull: false,
-    defaultValue: 0.00,
+    defaultValue: 0,
   },
   medicalAllowance: {
-    type: dt.DECIMAL(10, 2),
+    type: dt.INTEGER,
     allowNull: false,
-    defaultValue: 0.00,
+    defaultValue: 0,
   },
   travelAllowance: {
-    type: dt.DECIMAL(10, 2),
+    type: dt.INTEGER,
     allowNull: false,
-    defaultValue: 0.00,
+    defaultValue: 0,
   },
   otherAllowances: {
-    type: dt.DECIMAL(10, 2),
+    type: dt.INTEGER,
     allowNull: false,
-    defaultValue: 0.00,
+    defaultValue: 0,
   },
   
   // Deductions
   providentFund: {
-    type: dt.DECIMAL(10, 2),
+    type: dt.INTEGER,
     allowNull: false,
-    defaultValue: 0.00,
+    defaultValue: 0,
   },
   taxDeduction: {
-    type: dt.DECIMAL(10, 2),
+    type: dt.INTEGER,
     allowNull: false,
-    defaultValue: 0.00,
+    defaultValue: 0,
   },
   otherDeductions: {
-    type: dt.DECIMAL(10, 2),
+    type: dt.INTEGER,
     allowNull: false,
-    defaultValue: 0.00,
+    defaultValue: 0,
   },
   
   // Attendance
@@ -119,48 +118,42 @@ const Salary = sequelize.define("salary", {
     defaultValue: 0.00,
   },
   overtimeRate: {
-    type: dt.DECIMAL(10, 2),
+    type: dt.INTEGER,
     allowNull: false,
-    defaultValue: 200.00,
+    defaultValue: 200,
   },
   overtimeAmount: {
-    type: dt.DECIMAL(10, 2),
+    type: dt.INTEGER,
     allowNull: false,
-    defaultValue: 0.00,
+    defaultValue: 0,
   },
   
   // Bonuses
   performanceBonus: {
-    type: dt.DECIMAL(10, 2),
+    type: dt.INTEGER,
     allowNull: false,
-    defaultValue: 0.00,
+    defaultValue: 0,
   },
   festivalBonus: {
-    type: dt.DECIMAL(10, 2),
+    type: dt.INTEGER,
     allowNull: false,
-    defaultValue: 0.00,
+    defaultValue: 0,
   },
   otherBonuses: {
-    type: dt.DECIMAL(10, 2),
+    type: dt.INTEGER,
     allowNull: false,
-    defaultValue: 0.00,
+    defaultValue: 0,
   },
   
-  // Calculations
-  grossSalary: {
-    type: dt.DECIMAL(10, 2),
-    allowNull: false,
-    defaultValue: 0.00,
-  },
   totalDeductions: {
-    type: dt.DECIMAL(10, 2),
+    type: dt.BIGINT,
     allowNull: false,
-    defaultValue: 0.00,
+    defaultValue: 0,
   },
   netSalary: {
-    type: dt.DECIMAL(10, 2),
+    type: dt.BIGINT,
     allowNull: false,
-    defaultValue: 0.00,
+    defaultValue: 0,
   },
   
   // Payment Information
@@ -216,7 +209,9 @@ const Salary = sequelize.define("salary", {
   tableName: 'salaries',
   timestamps: true,
   indexes: [
-    // Only need indexes for fields that don't already have unique constraint
+    {
+      fields: ['employeeId']
+    },
     {
       fields: ['paymentStatus']
     },
@@ -228,6 +223,9 @@ const Salary = sequelize.define("salary", {
     },
     {
       fields: ['salaryId']
+    },
+    {
+      fields: ['salaryMonth', 'salaryYear']
     }
   ]
 });

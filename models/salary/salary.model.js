@@ -142,20 +142,6 @@ const Salary = sequelize.define(
       defaultValue: 0,
     },
 
-    // Calculations
-    grossSalary: {
-      type: dt.FLOAT,
-      allowNull: false,
-    },
-    totalDeductions: {
-      type: dt.FLOAT,
-      allowNull: false,
-    },
-    netSalary: {
-      type: dt.FLOAT,
-      allowNull: false,
-    },
-
     // Payment Info
     paymentStatus: {
       type: dt.ENUM("pending", "paid", "failed", "cancelled"),
@@ -198,25 +184,7 @@ const Salary = sequelize.define(
             .padStart(3, "0");
           salary.salaryId = `SAL-${monthYear}-${random}`;
         }
-
-        // Calculate derived fields
-        salary.grossSalary =
-          salary.basicSalary +
-          salary.houseRent +
-          salary.medicalAllowance +
-          salary.travelAllowance +
-          salary.otherAllowances +
-          salary.overtimeAmount +
-          salary.performanceBonus +
-          salary.festivalBonus +
-          salary.otherBonuses;
-
-        salary.totalDeductions =
-          salary.providentFund + salary.taxDeduction + salary.otherDeductions;
-
-        salary.netSalary = salary.grossSalary - salary.totalDeductions;
-
-        // Calculate overtime amount if not provided
+         // Calculate overtime amount if not provided
         if (
           salary.overtimeHours > 0 &&
           salary.overtimeRate > 0 &&
