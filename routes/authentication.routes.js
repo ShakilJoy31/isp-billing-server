@@ -40,7 +40,7 @@ router.delete("/delete-employee/:id", deleteEmployee);
 
 
 //! Super-Admin Routes
-router.post("/register-new-super-admin", createSuperAdmin); // not being used till now. if you need to use this make another table for the super-admins creation. 
+router.post("/register-new-super-admin", createSuperAdmin); //! not being used till now. if you need to use this make another table for the super-admins creation. 
 router.get("/super-admin-dashboard", getSuperAdminDashboard);
 router.get("/dashboard-stats", getDashboardStats);
 router.get("/recent-activities", getRecentActivities);

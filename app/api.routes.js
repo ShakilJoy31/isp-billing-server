@@ -13,6 +13,7 @@ const bankRoutes = require("../routes/account.routes");
 const uploadWithMulter = require("../middleware/uploadWithMulter");
 const expenseRoutes = require("../routes/expense.routes");
 const FTPServerRoutes = require("../routes/FTPServer.routes");
+const emailRoutes = require("../routes/email.routes");
 
 const router = require("express").Router();
 
@@ -43,6 +44,8 @@ router.use("/live-chat", liveChatRoutes);
 router.use("/public-contact", publicContactRouter);
 
 router.use("/ftp", FTPServerRoutes);
+
+router.use("/email", emailRoutes)
 
 
 router.post("/upload/single", uploadWithMulter.single("file"), (req, res) => {
