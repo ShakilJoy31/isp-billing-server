@@ -32,7 +32,6 @@ const AuthorityInformation = sequelize.define("authority-information", {
   photo: {
     type: dt.STRING,
     allowNull: true,
-    defaultValue: '/default-avatar.png',
   },
   fatherOrSpouseName: {
     type: dt.STRING,
