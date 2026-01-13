@@ -4,6 +4,8 @@ const {
   sendAccountCreationEmail,
   sendSalaryReceivedEmail,
   sendReminderEmail,
+  sendBillCollectionEmail,
+  sendTransactionStatusEmail,
 } = require("../controller/email/email.controller");
 const { createEmail, getAllEmails, getEmailById, updateEmail, toggleEmailStatus, deleteEmail, getActiveEmails, getEmailStats } = require("../controller/email/emailManagement.controller");
 const router = express.Router();
@@ -16,6 +18,12 @@ router.post("/send-salary-email/:employeeId", sendSalaryReceivedEmail);
 
 //! ONE endpoint for all reminder/warning emails
 router.post("/send-reminder-email", sendReminderEmail);
+
+//! Bill collection by employee. Super-Admin can collect bill on behalf of a selected employee. 
+router.post("/send-bill-collection-email", sendBillCollectionEmail);
+
+//! Approve email by Super-Admin
+router.post('/send-transaction-status-email', sendTransactionStatusEmail);
 
 
 

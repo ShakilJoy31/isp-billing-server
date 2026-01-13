@@ -7,6 +7,7 @@ const { Expense } = require("../../models/expense/expense.model");
 const BankAccount = require("../../models/account/account.model");
 const Reminder = require("../../models/reminder/reminder.model");
 const EmployeeAttendance = require("../../models/attendence/attendence.model");
+const { transformClientWithPackage } = require("./signup");
 
 
 //! Helper function to get date ranges

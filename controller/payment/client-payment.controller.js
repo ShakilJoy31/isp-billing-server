@@ -1,11 +1,17 @@
+const { Op } = require("sequelize");
 const sequelize = require("../../database/connection");
 const ClientInformation = require("../../models/Authentication/client.model");
 const Transaction = require("../../models/payment/client-payment.model");
+const EmployeePayment = require("../../models/payment/employee-payment.model");
+const { transformClientWithPackage } = require("../auth/signup");
 
+
+//! Creating transaction.........
 const createTransaction = async (req, res) => {
   try {
     const {
       userId,
+      clientId,
       trxId,
       amount,
       phoneNumber,
@@ -23,7 +29,7 @@ const createTransaction = async (req, res) => {
       });
     }
 
-    // Check if user already paid for this month and year
+    // Check if user already paid for this month and year in Transaction table
     const existingPayment = await Transaction.findOne({
       where: {
         userId,
@@ -33,16 +39,49 @@ const createTransaction = async (req, res) => {
       },
     });
 
+    // Format the billing month for EmployeePayment comparison
+    // From your data: "April" + "2026" = "April 2026"
+    const employeeBillingMonth = `${billingMonth} ${billingYear}`;
+    
+    console.log('Checking EmployeePayment for:', employeeBillingMonth, userId);
+    
+    const existingPaymentByEmployee = await EmployeePayment.findOne({
+      where: {
+        clientId: clientId,
+        billingMonth: employeeBillingMonth, // Now UNCOMMENTED and using correct format
+        status: ["collected", "verified", "deposited"], // These are the statuses in EmployeePayment
+      },
+    });
+
+    console.log('Existing Employee Payment:', existingPaymentByEmployee);
+
     if (existingPayment) {
       return res.status(409).json({
         success: false,
-        message: `Payment already exists for ${billingMonth} ${billingYear}.`,
+        message: `You already have a ${existingPayment.status} payment for ${billingMonth} ${billingYear}.`,
         data: {
           existingPayment: {
             id: existingPayment.id,
             amount: existingPayment.amount,
             status: existingPayment.status,
             createdAt: existingPayment.createdAt,
+          },
+        },
+      });
+    }
+
+    if (existingPaymentByEmployee) {
+      return res.status(409).json({
+        success: false,
+        message: `A payment for ${billingMonth} ${billingYear} has already been collected by Ringtel staff.`,
+        data: {
+          existingPayment: {
+            id: existingPaymentByEmployee.id,
+            amount: existingPaymentByEmployee.amount,
+            status: existingPaymentByEmployee.status,
+            collector: existingPaymentByEmployee.employeeName,
+            receiptNumber: existingPaymentByEmployee.receiptNumber,
+            collectedAt: existingPaymentByEmployee.collectionDate,
           },
         },
       });
@@ -86,15 +125,28 @@ const createTransaction = async (req, res) => {
   }
 };
 
+
+
+
+
+
+
+
+
+
+
 //! Get trx by user ID.
 const getTransactionsByUserId = async (req, res) => {
   try {
     const { userId } = req.params;
+    const {clientId} = req.params;
     const { page = 1, limit = 10 } = req.query;
 
     const pageNumber = parseInt(page, 10);
     const limitNumber = parseInt(limit, 10);
     const offset = (pageNumber - 1) * limitNumber;
+
+    console.log(clientId, userId)
 
     const totalItems = await Transaction.count({ where: { userId } });
 
@@ -105,7 +157,18 @@ const getTransactionsByUserId = async (req, res) => {
       order: [["createdAt", "DESC"]],
     });
 
-    if (!transactions || transactions.length === 0) {
+
+    const transactionsByRingtel = await EmployeePayment.findAll({
+      where: { clientId: clientId },
+      limit: limitNumber,
+      offset: offset,
+      order: [["createdAt", "DESC"]],
+    });
+
+    // console.log('employee ppppp'+transactionsByRingtel)
+    
+
+    if (transactions.length === 0 && transactionsByRingtel.length === 0) {
       return res.status(404).json({
         success: false,
         message: "No transactions found for the given user ID",
@@ -118,6 +181,7 @@ const getTransactionsByUserId = async (req, res) => {
       success: true,
       message: "Transactions retrieved successfully",
       data: transactions,
+      transactionsByRingtel: transactionsByRingtel,
       pagination: {
         totalItems,
         totalPages,
@@ -134,6 +198,35 @@ const getTransactionsByUserId = async (req, res) => {
     });
   }
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 //! Update transaction status
 const updateTransactionStatus = async (req, res) => {
@@ -224,6 +317,20 @@ const updateTransactionStatus = async (req, res) => {
   }
 };
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 //! Get all transactions with filtering and pagination (for admin dashboard)
 const getAllTransactions = async (req, res) => {
   try {
@@ -269,16 +376,16 @@ const getAllTransactions = async (req, res) => {
     }
 
     if (search) {
-      whereClause = {
-        ...whereClause,
-        $or: [
-          { trxId: { $like: `%${search}%` } },
-          { userId: { $like: `%${search}%` } },
-          { phoneNumber: { $like: `%${search}%` } },
-          { billingMonth: { $like: `%${search}%` } },
-          { billingYear: { $like: `%${search}%` } },
-        ],
-      };
+      whereClause[Op.or] = [
+        { trxId: { [Op.like]: `%${search}%` } },
+        { userId: { [Op.like]: `%${search}%` } },
+        { phoneNumber: { [Op.like]: `%${search}%` } },
+        { billingMonth: { [Op.like]: `%${search}%` } },
+        { billingYear: { [Op.like]: `%${search}%` } },
+        { remark: { [Op.like]: `%${search}%` } },
+        { approvalRemark: { [Op.like]: `%${search}%` } },
+        { rejectionReason: { [Op.like]: `%${search}%` } },
+      ];
     }
 
     const totalItems = await Transaction.count({ where: whereClause });
@@ -340,7 +447,7 @@ const getAllTransactions = async (req, res) => {
       const admins = await ClientInformation.findAll({
         where: {
           id: adminIds,
-          role: "super-admin", // Assuming super-admins have this role
+          role: "Super-Admin",
         },
         attributes: { exclude: ["password"] },
       });
@@ -427,6 +534,30 @@ const getAllTransactions = async (req, res) => {
     });
   }
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 //! Get transaction by ID
 const getTransactionById = async (req, res) => {

@@ -7,8 +7,12 @@ const router = express.Router();
 //! Client payment routes...........
 // Existing routes
 router.post("/add-new-payment", createTransaction);
-router.get("/payment-history/:userId", getTransactionsByUserId);
+// For dashboard (CurrentPackage component)
+
+router.get("/payment-history/:userId/:clientId", getTransactionsByUserId);
 // New routes
+
+
 router.put("/update-status/:transactionId", updateTransactionStatus);
 router.get("/transactions", getAllTransactions); // For admin dashboard
 router.get("/transaction/:transactionId", getTransactionById);

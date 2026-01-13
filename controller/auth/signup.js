@@ -1772,6 +1772,7 @@ module.exports = {
   updateClient,
   deleteClient,
   // getPackageDataByClientId,
+  transformClientWithPackage,
 
   checkUserCredentials,
 };
