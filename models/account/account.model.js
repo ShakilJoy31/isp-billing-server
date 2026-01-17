@@ -33,7 +33,7 @@ const BankAccount = sequelize.define(
         "MobileBanking",
         "AgentBanking",
         "DigitalWallet",
-        "Other"
+        "Other",
       ),
       allowNull: false,
       defaultValue: "Bank",
@@ -62,11 +62,19 @@ const BankAccount = sequelize.define(
       type: dt.DECIMAL(15, 2),
       allowNull: false,
       defaultValue: 0,
+      get() {
+        const value = this.getDataValue("openingBalance");
+        return value === null ? null : parseFloat(value);
+      },
     },
     currentBalance: {
       type: dt.DECIMAL(15, 2),
       allowNull: false,
       defaultValue: 0,
+      get() {
+        const value = this.getDataValue("currentBalance");
+        return value === null ? null : parseFloat(value);
+      },
     },
     currency: {
       type: dt.STRING,
@@ -120,11 +128,11 @@ const BankAccount = sequelize.define(
         if (account.isNewRecord && !account.currentBalance) {
           account.currentBalance = account.openingBalance || 0;
         }
-        
+
         // Validate account number format based on type
         if (account.accountNumber) {
           // Remove any spaces or dashes
-          account.accountNumber = account.accountNumber.replace(/[\s-]/g, '');
+          account.accountNumber = account.accountNumber.replace(/[\s-]/g, "");
         }
       },
       beforeCreate: (account) => {
@@ -132,7 +140,7 @@ const BankAccount = sequelize.define(
         if (account.openingBalance && !account.currentBalance) {
           account.currentBalance = account.openingBalance;
         }
-      }
+      },
     },
     indexes: [
       {
@@ -154,7 +162,7 @@ const BankAccount = sequelize.define(
     ],
     tableName: "bank_accounts",
     timestamps: true,
-  }
+  },
 );
 
 module.exports = BankAccount;

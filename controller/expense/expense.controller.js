@@ -5,7 +5,7 @@ const ExpenseCategory = require("../../models/expense/category.model");
 const ExpenseSubCategory = require("../../models/expense/sub-category.model");
 const BankAccount = require("../../models/account/account.model");
 
-// Create new expense with multiple payments
+//! Create new expense with multiple payments
 const createExpense = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   
@@ -175,7 +175,7 @@ const createExpense = async (req, res, next) => {
   }
 };
 
-// Get all expenses with filtering and pagination
+//! Get all expenses with filtering and pagination
 const getAllExpenses = async (req, res, next) => {
   try {
     const { 
@@ -316,7 +316,7 @@ const getAllExpenses = async (req, res, next) => {
   }
 };
 
-// Get expense by ID
+//! Get expense by ID
 const getExpenseById = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -372,7 +372,7 @@ const getExpenseById = async (req, res, next) => {
   }
 };
 
-// Update expense
+//! Update expense
 const updateExpense = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   
@@ -536,7 +536,7 @@ const updateExpense = async (req, res, next) => {
   }
 };
 
-// Delete expense (soft delete)
+//! Delete expense (soft delete)
 const deleteExpense = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -577,7 +577,7 @@ const deleteExpense = async (req, res, next) => {
   }
 };
 
-// Approve expense and deduct from bank accounts
+//! Approve expense and deduct from bank accounts
 const approveExpense = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   
@@ -744,7 +744,7 @@ const approveExpense = async (req, res, next) => {
   }
 };
 
-// Reject expense
+//! Reject expense
 const rejectExpense = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -810,7 +810,7 @@ const rejectExpense = async (req, res, next) => {
   }
 };
 
-// Get expense statistics
+//! Get expense statistics
 const getExpenseStats = async (req, res, next) => {
   try {
     const { startDate, endDate, expenseCategoryId } = req.query;
@@ -918,7 +918,7 @@ const getExpenseStats = async (req, res, next) => {
   }
 };
 
-// Get expenses by category
+//! Get expenses by category
 const getExpensesByCategory = async (req, res, next) => {
   try {
     const { categoryId } = req.params;
@@ -1008,7 +1008,7 @@ const getExpensesByCategory = async (req, res, next) => {
   }
 };
 
-// Get expenses by account
+//! Get expenses by account
 const getExpensesByAccount = async (req, res, next) => {
   try {
     const { accountId } = req.params;
@@ -1101,7 +1101,7 @@ const getExpensesByAccount = async (req, res, next) => {
   }
 };
 
-// Toggle expense status (active/inactive)
+//! Toggle expense status (active/inactive)
 const toggleExpenseStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
