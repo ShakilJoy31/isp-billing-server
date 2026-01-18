@@ -42,6 +42,7 @@ const createEmployeePayment = async (req, res) => {
       amount,
       discount,
       paymentMethod,
+      paymentAccount,
       transactionId,
       referenceNote,
       notes,
@@ -229,7 +230,8 @@ const createEmployeePayment = async (req, res) => {
       discount: parseFloat(discount) || 0,
 
       // Payment Method
-      paymentMethod: paymentMethod || "cash",
+      paymentMethod: paymentMethod,
+      paymentAccount: paymentAccount,
       transactionId: transactionId,
       referenceNote: referenceNote,
 
@@ -720,7 +722,7 @@ const getClientPaymentHistory = async (req, res) => {
   }
 };
 
-//! 7. Admin: Get All Employee Collections
+//! 7. Admin: Get All Employee Collections - FIXED VERSION
 const getAllEmployeeCollections = async (req, res) => {
   try {
     const {
@@ -731,6 +733,8 @@ const getAllEmployeeCollections = async (req, res) => {
       employeeId,
       status,
       paymentMethod,
+      clientName,
+      search,
     } = req.query;
 
     const pageNumber = parseInt(page);
@@ -766,16 +770,43 @@ const getAllEmployeeCollections = async (req, res) => {
       whereClause.paymentMethod = paymentMethod;
     }
 
+    // Client name search
+    const searchTerm = clientName || search;
+    if (searchTerm && searchTerm.trim() !== '') {
+      whereClause.clientName = {
+        [Op.like]: `%${searchTerm}%`,
+      };
+    }
+
     // Get total count
     const totalItems = await EmployeePayment.count({ where: whereClause });
 
-    // Get paginated data WITHOUT include (since no association)
+    // Get paginated data WITHOUT include first (to test)
     const payments = await EmployeePayment.findAll({
       where: whereClause,
       limit: limitNumber,
       offset: offset,
       order: [["collectionDate", "DESC"]],
     });
+
+    // Get all unique employee IDs
+    const employeeIds = [...new Set(payments.map(payment => payment.employeeId))];
+
+    // Fetch employee emails separately
+    let emailMap = {};
+    if (employeeIds.length > 0) {
+      const employees = await AuthorityInformation.findAll({
+        where: {
+          userId: employeeIds
+        },
+        attributes: ['userId', 'email']
+      });
+
+      // Create email lookup map
+      employees.forEach(employee => {
+        emailMap[employee.userId] = employee.email;
+      });
+    }
 
     // Extract all unique client user IDs
     const clientUserIds = [
@@ -789,7 +820,7 @@ const getAllEmployeeCollections = async (req, res) => {
     if (clientUserIds.length > 0) {
       const clients = await ClientInformation.findAll({
         where: { userId: clientUserIds },
-        attributes: ["id", "userId"], // Only get id and userId
+        attributes: ["id", "userId"],
       });
 
       // Create lookup map: userId -> id
@@ -798,12 +829,13 @@ const getAllEmployeeCollections = async (req, res) => {
       });
     }
 
-    // Transform payments to add client ID
+    // Transform payments to include email and clientDatabaseId
     const transformedPayments = payments.map((payment) => {
       const paymentData = payment.toJSON();
 
       return {
         ...paymentData,
+        email: emailMap[paymentData.employeeId] || paymentData.employeeId,
         clientDatabaseId: clientMap[paymentData.clientId] || null,
       };
     });
@@ -811,10 +843,9 @@ const getAllEmployeeCollections = async (req, res) => {
     const totalPages = Math.ceil(totalItems / limitNumber);
 
     // Calculate summary statistics
-    const totalAmount =
-      (await EmployeePayment.sum("amount", { where: whereClause })) || 0;
+    const totalAmount = (await EmployeePayment.sum("amount", { where: whereClause })) || 0;
 
-    // Group by employee
+    // Group by employee for statistics
     const employeeStats = await EmployeePayment.findAll({
       where: whereClause,
       attributes: [

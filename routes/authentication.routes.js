@@ -10,7 +10,7 @@ const router = express.Router();
 router.post("/register-new-client", createClient);
 router.put("/update-client/:id", updateClient);
 router.delete("/delete-client/:id", deleteClient);
-router.get("/get-refered-users-according-to-userId/:userId", getClientsByReferCode);
+router.get("/get-refered-users-according-to-userId/:referId", getClientsByReferCode);
 router.get("/get-clients", getAllClients);
 router.get("/get-client-according-to-id/:id", getClientById);
 // router.get("/get-client-dashboard-data", getDataById);

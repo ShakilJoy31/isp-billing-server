@@ -65,21 +65,18 @@ const EmployeePayment = sequelize.define(
       allowNull: true,
       defaultValue: 0,
     },
-    
 
     // Payment Method
     paymentMethod: {
-      type: dt.ENUM(
-        "cash",
-        "bkash",
-        "nagad",
-        "rocket",
-        "card",
-        "bank_transfer"
-      ),
-      defaultValue: "cash",
+      type: dt.STRING,
       allowNull: false,
     },
+
+    paymentAccount: {
+      type: dt.INTEGER,
+      allowNull: false,
+    },
+
     transactionId: {
       type: dt.STRING,
       allowNull: true,
@@ -113,7 +110,7 @@ const EmployeePayment = sequelize.define(
         "verified",
         "deposited",
         "cancelled",
-        "refunded"
+        "refunded",
       ),
       defaultValue: "collected",
       allowNull: false,
@@ -129,8 +126,6 @@ const EmployeePayment = sequelize.define(
       comment: "Receipt/transaction slip image path",
     },
 
-
-    
     // Add these fields to your EmployeePayment model if not already present:
     verifiedBy: {
       type: dt.STRING,
@@ -175,7 +170,7 @@ const EmployeePayment = sequelize.define(
         fields: ["collectionDate"],
       },
     ],
-  }
+  },
 );
 
 // Association with Client

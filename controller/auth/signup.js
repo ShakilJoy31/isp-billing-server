@@ -690,16 +690,6 @@ const getClientStats = async (req, res, next) => {
 
 
 
-
-
-
-
-
-
-
-
-
-
 //!___________________________________________________________________________________________________________________________________________________________________________________
 //! Helper function to generate unique employee ID
 const generateUniqueEmployeeId = async (fullName) => {

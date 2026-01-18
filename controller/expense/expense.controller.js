@@ -198,38 +198,27 @@ const getAllExpenses = async (req, res, next) => {
     // Build where clause for filtering
     const whereClause = {};
     
-    // Handle search filter
-    if (search && search !== '') {
-      whereClause[Op.or] = [
-        { note: { [Op.like]: `%${search}%` } },
-        { expenseCode: { [Op.like]: `%${search}%` } },
-        { '$category.categoryName$': { [Op.like]: `%${search}%` } }
-      ];
-    }
-    
-    // Handle category filter
+    // Parse numeric values
     if (expenseCategoryId && expenseCategoryId !== '') {
       whereClause.expenseCategoryId = parseInt(expenseCategoryId);
     }
     
-    // Handle subcategory filter
     if (expenseSubcategoryId && expenseSubcategoryId !== '') {
       whereClause.expenseSubcategoryId = parseInt(expenseSubcategoryId);
     }
     
-    // Handle status filter
+    // Handle string filters
     if (status && status !== '') {
       whereClause.status = status;
     }
     
-    // Handle payment status filter
     if (paymentStatus && paymentStatus !== '') {
       whereClause.paymentStatus = paymentStatus;
     }
     
-    // Handle isActive filter
+    // Handle boolean filter
     if (isActive !== undefined && isActive !== '') {
-      whereClause.isActive = isActive === 'true';
+      whereClause.isActive = isActive === 'true' || isActive === '1' || isActive === true;
     }
     
     // Date range filter
@@ -254,26 +243,31 @@ const getAllExpenses = async (req, res, next) => {
       }
     }
 
+    // Handle search separately
+    if (search && search !== '') {
+      whereClause[Op.or] = [
+        { note: { [Op.like]: `%${search}%` } },
+        { expenseCode: { [Op.like]: `%${search}%` } }
+      ];
+    }
+
     const offset = (parseInt(page) - 1) * parseInt(limit);
 
-    // Validate and set sort order
+    // Validate sort
     const validSortOrders = ['ASC', 'DESC'];
     const finalSortOrder = validSortOrders.includes(sortOrder.toUpperCase()) 
       ? sortOrder.toUpperCase() 
       : 'DESC';
 
-    // Validate sortBy field
     const validSortFields = [
       'date', 'totalAmount', 'status', 'paymentStatus', 
       'createdAt', 'updatedAt', 'expenseCode'
     ];
     const finalSortBy = validSortFields.includes(sortBy) ? sortBy : 'createdAt';
 
+    // Query with includes
     const expenses = await Expense.findAndCountAll({
       where: whereClause,
-      order: [[finalSortBy, finalSortOrder]],
-      limit: parseInt(limit),
-      offset: offset,
       include: [
         {
           model: ExpenseCategory,
@@ -296,6 +290,9 @@ const getAllExpenses = async (req, res, next) => {
           }]
         }
       ],
+      order: [[finalSortBy, finalSortOrder]],
+      limit: parseInt(limit),
+      offset: offset,
       distinct: true
     });
 

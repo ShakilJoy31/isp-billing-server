@@ -45,7 +45,7 @@ router.use("/public-contact", publicContactRouter);
 
 router.use("/ftp", FTPServerRoutes);
 
-router.use("/email", emailRoutes)
+router.use("/email", emailRoutes);
 
 
 router.post("/upload/single", uploadWithMulter.single("file"), (req, res) => {
