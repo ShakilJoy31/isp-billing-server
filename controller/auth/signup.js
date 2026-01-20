@@ -432,7 +432,7 @@ const updateClient = async (req, res, next) => {
       connectionDetails: connectionDetails || existingClient.connectionDetails,
       costForPackage: parseInt(costForPackage) || existingClient.costForPackage,
       referId: referId || existingClient.referId,
-      photo: photo || "",
+      photo: photo || existingClient.photo,
       status: status || existingClient.status,
       routerLoginId: routerLoginId || existingClient.routerLoginId,
       routerLoginPassword: routerLoginPassword || existingClient.routerLoginPassword,
