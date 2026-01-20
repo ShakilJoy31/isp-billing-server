@@ -407,8 +407,7 @@ const approveWithdrawal = async (req, res, next) => {
 const rejectWithdrawal = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { rejectionReason } = req.body;
-    const adminUser = req.user;
+    const { rejectionReason, user } = req.body;
 
     if (!rejectionReason) {
       return res.status(400).json({
@@ -441,7 +440,7 @@ const rejectWithdrawal = async (req, res, next) => {
 
     // Update withdrawal
     withdrawal.status = 'rejected';
-    withdrawal.approvedBy = adminUser.email;
+    withdrawal.approvedBy = user;
     withdrawal.approvedAt = new Date();
     withdrawal.rejectionReason = rejectionReason;
 
