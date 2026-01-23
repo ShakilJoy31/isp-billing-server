@@ -212,22 +212,6 @@ const getTransactionsByUserId = async (req, res) => {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 //! Update transaction status
 const updateTransactionStatus = async (req, res) => {
   try {
@@ -543,22 +527,6 @@ const getAllTransactions = async (req, res) => {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 //! Get transaction by ID
 const getTransactionById = async (req, res) => {
   try {
@@ -863,6 +831,114 @@ const getUserPaymentHistory = async (req, res) => {
   }
 };
 
+
+
+
+
+
+
+//! Getting paid month according to the client. 
+const getPaidMonthsForUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "User ID is required"
+      });
+    }
+
+    const clientInfos = await ClientInformation.findAll({
+      where: { userId: userId },
+      attributes: ['id', 'fullName']
+    });
+
+    if (!clientInfos || clientInfos.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `User not found: ${userId}`
+      });
+    }
+
+    const numericUserIds = clientInfos.map(client => client.id.toString());
+
+    // Step 2: Get ALL payments from Transaction table for ALL numeric IDs
+    const transactionPayments = await Transaction.findAll({
+      where: {
+        userId: numericUserIds,
+      },
+      attributes: ['id', 'userId', 'billingMonth', 'billingYear', 'status', 'amount']
+    });
+
+    // Step 3: Get payments from EmployeePayment table
+    const employeePayments = await EmployeePayment.findAll({
+      where: {
+        clientId: userId,
+        status: ["collected", "verified", "deposited"]
+      },
+      attributes: ['id', 'billingMonth', 'amount', 'status']
+    });
+
+    transactionPayments.forEach(payment => {
+      console.log(`- ID: ${payment.id}, UserId: ${payment.userId}, Month: ${payment.billingMonth} ${payment.billingYear}, Status: ${payment.status}`);
+    });
+
+    // Step 5: Combine and format all paid months
+    const paidMonthsSet = new Set();
+
+    // Add from transaction payments (format: "January 2026")
+    transactionPayments.forEach(payment => {
+      paidMonthsSet.add(`${payment.billingMonth} ${payment.billingYear}`);
+    });
+
+    // Add from employee payments (already in format: "June 2026")
+    employeePayments.forEach(payment => {
+      if (payment.billingMonth) {
+        paidMonthsSet.add(payment.billingMonth);
+      }
+    });
+
+    // Convert to array and sort chronologically
+    const paidMonthsArray = Array.from(paidMonthsSet);
+    
+    // Sort chronologically (oldest first)
+    paidMonthsArray.sort((a, b) => {
+      const months = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+      ];
+      
+      const [monthA, yearA] = a.split(' ');
+      const [monthB, yearB] = b.split(' ');
+      
+      if (parseInt(yearA) !== parseInt(yearB)) {
+        return parseInt(yearA) - parseInt(yearB);
+      }
+      
+      return months.indexOf(monthA) - months.indexOf(monthB);
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Paid months for ${userId}`,
+      data: paidMonthsArray
+    });
+
+  } catch (error) {
+    console.error("Error fetching paid months:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch paid months",
+      error: error.message
+    });
+  }
+};
+
+
+
+
+
 module.exports = {
   createTransaction,
   getTransactionsByUserId,
@@ -873,4 +949,5 @@ module.exports = {
   bulkUpdateTransactionStatus,
   checkPaymentEligibility,
   getUserPaymentHistory,
+  getPaidMonthsForUser
 };

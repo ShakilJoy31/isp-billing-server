@@ -1,5 +1,5 @@
 const express = require("express");
-const { createTransaction, getTransactionsByUserId, updateTransactionStatus, getAllTransactions, getTransactionById, getTransactionStats, bulkUpdateTransactionStatus } = require("../controller/payment/client-payment.controller");
+const { createTransaction, getTransactionsByUserId, updateTransactionStatus, getAllTransactions, getTransactionById, getTransactionStats, bulkUpdateTransactionStatus, getPaidMonthsForUser } = require("../controller/payment/client-payment.controller");
 const { createEmployeePayment, getPaymentsByEmployee, getTodaysCollections, searchClientForPayment, getClientPaymentHistory, getEmployeeCollectionStats, getPaymentDetails, verifyPayment, getAllEmployeeCollections, markAsDeposited, getAllEmployeeCollectionStats, getAllEmployeePerformanceStats, updateEmployeePayment, deleteCollectedBillBySuperAdmin, getClientPaidMonthsHistory } = require("../controller/payment/employee-payment.controller");
 const router = express.Router();
 
@@ -10,6 +10,8 @@ router.post("/add-new-payment", createTransaction);
 // For dashboard (CurrentPackage component)
 
 router.get("/payment-history/:userId/:clientId", getTransactionsByUserId);
+
+router.get('/user-paid-months/:userId', getPaidMonthsForUser);
 // New routes
 
 
