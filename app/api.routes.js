@@ -15,6 +15,7 @@ const expenseRoutes = require("../routes/expense.routes");
 const FTPServerRoutes = require("../routes/FTPServer.routes");
 const emailRoutes = require("../routes/email.routes");
 const withdwarRoutes = require("../routes/Withdraw.routes");
+const superAdminReportRoutes = require("../routes/super-adminReports.route");
 
 
 const router = require("express").Router();
@@ -50,6 +51,8 @@ router.use("/ftp", FTPServerRoutes);
 router.use("/email", emailRoutes);
 
 router.use("/withdraw", withdwarRoutes);
+
+router.use("/reports", superAdminReportRoutes)
 
 
 router.post("/upload/single", uploadWithMulter.single("file"), (req, res) => {
