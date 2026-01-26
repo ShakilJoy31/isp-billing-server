@@ -12,7 +12,7 @@ const AuthorityInformation = sequelize.define("authority-information", {
     allowNull: false, 
   },
   age: {
-    type: dt.INTEGER,
+    type: dt.INTEGER, 
     allowNull: false,
   },
   bloodGroup: {

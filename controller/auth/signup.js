@@ -43,7 +43,6 @@ const transformClientWithPackage = async (client) => {
   return clientData;
 };
 
-
 //! Create new client
 const createClient = async (req, res, next) => {
   try {
@@ -86,7 +85,8 @@ const createClient = async (req, res, next) => {
     // Validate required fields
     if (!fullName || !mobileNo || !email || !nidOrPassportNo) {
       return res.status(400).json({
-        message: "Full name, mobile number, email, and NID/Passport number are required!",
+        message:
+          "Full name, mobile number, email, and NID/Passport number are required!",
       });
     }
 
@@ -99,7 +99,9 @@ const createClient = async (req, res, next) => {
     }
 
     // Check if NID already exists
-    const nidExists = await ClientInformation.findOne({ where: { nidOrPassportNo } });
+    const nidExists = await ClientInformation.findOne({
+      where: { nidOrPassportNo },
+    });
     if (nidExists) {
       return res.status(409).json({
         message: "This NID/Passport number already exists!",
@@ -107,7 +109,9 @@ const createClient = async (req, res, next) => {
     }
 
     // Check if mobile already exists
-    const mobileExists = await ClientInformation.findOne({ where: { mobileNo } });
+    const mobileExists = await ClientInformation.findOne({
+      where: { mobileNo },
+    });
     if (mobileExists) {
       return res.status(409).json({
         message: "This mobile number already exists!",
@@ -117,17 +121,17 @@ const createClient = async (req, res, next) => {
     // Parse NID photo data
     let nidPhotoData = {
       frontSide: "",
-      backSide: ""
+      backSide: "",
     };
 
     if (nidPhoto) {
-      if (typeof nidPhoto === 'string') {
+      if (typeof nidPhoto === "string") {
         try {
           nidPhotoData = JSON.parse(nidPhoto);
         } catch (error) {
           console.log("Error parsing nidPhoto string:", error);
         }
-      } else if (typeof nidPhoto === 'object') {
+      } else if (typeof nidPhoto === "object") {
         nidPhotoData = nidPhoto;
       }
     }
@@ -182,8 +186,8 @@ const createClient = async (req, res, next) => {
         ...clientData,
         nidPhoto: {
           frontSide: newClient.nidPhotoFrontSide,
-          backSide: newClient.nidPhotoBackSide
-        }
+          backSide: newClient.nidPhotoBackSide,
+        },
       },
     });
   } catch (error) {
@@ -210,7 +214,7 @@ const getAllClients = async (req, res, next) => {
     const offset = (pageNumber - 1) * limitNumber;
 
     const whereClause = {
-      role: 'client' 
+      role: "client",
     };
 
     if (search) {
@@ -239,16 +243,16 @@ const getAllClients = async (req, res, next) => {
 
     // Transform each client with package details
     const transformedClients = await Promise.all(
-      clients.map((client) => transformClientWithPackage(client))
+      clients.map((client) => transformClientWithPackage(client)),
     );
 
     // Add nidPhoto to transformed clients
-    const clientsWithNidPhotos = transformedClients.map(client => ({
+    const clientsWithNidPhotos = transformedClients.map((client) => ({
       ...client,
       nidPhoto: {
         frontSide: client.nidPhotoFrontSide || "",
-        backSide: client.nidPhotoBackSide || ""
-      }
+        backSide: client.nidPhotoBackSide || "",
+      },
     }));
 
     const totalPages = Math.ceil(count / limitNumber);
@@ -293,8 +297,8 @@ const getClientById = async (req, res, next) => {
         ...clientData,
         nidPhoto: {
           frontSide: client.nidPhotoFrontSide || "",
-          backSide: client.nidPhotoBackSide || ""
-        }
+          backSide: client.nidPhotoBackSide || "",
+        },
       },
     });
   } catch (error) {
@@ -387,17 +391,17 @@ const updateClient = async (req, res, next) => {
     // Parse NID photo data
     let nidPhotoData = {
       frontSide: existingClient.nidPhotoFrontSide || "",
-      backSide: existingClient.nidPhotoBackSide || ""
+      backSide: existingClient.nidPhotoBackSide || "",
     };
 
     if (nidPhoto) {
-      if (typeof nidPhoto === 'string') {
+      if (typeof nidPhoto === "string") {
         try {
           nidPhotoData = JSON.parse(nidPhoto);
         } catch (error) {
           console.log("Error parsing nidPhoto string:", error);
         }
-      } else if (typeof nidPhoto === 'object') {
+      } else if (typeof nidPhoto === "object") {
         nidPhotoData = nidPhoto;
       }
     }
@@ -405,7 +409,8 @@ const updateClient = async (req, res, next) => {
     // Update client data
     const updateData = {
       fullName: fullName || existingClient.fullName,
-      fatherOrSpouseName: fatherOrSpouseName || existingClient.fatherOrSpouseName,
+      fatherOrSpouseName:
+        fatherOrSpouseName || existingClient.fatherOrSpouseName,
       dateOfBirth: dateOfBirth || existingClient.dateOfBirth,
       age: parseInt(age) || existingClient.age,
       sex: sex || existingClient.sex,
@@ -416,7 +421,8 @@ const updateClient = async (req, res, next) => {
       jobPlaceName: jobPlaceName || existingClient.jobPlaceName,
       jobCategory: jobCategory || existingClient.jobCategory,
       jobType: jobType || existingClient.jobType,
-      isFreeClient: isFreeClient !== undefined ? isFreeClient : existingClient.isFreeClient,
+      isFreeClient:
+        isFreeClient !== undefined ? isFreeClient : existingClient.isFreeClient,
       userAddedBy: userAddedBy || existingClient.userAddedBy,
       mobileNo: mobileNo || existingClient.mobileNo,
       customerId: customerId || existingClient.customerId,
@@ -435,7 +441,8 @@ const updateClient = async (req, res, next) => {
       photo: photo || existingClient.photo,
       status: status || existingClient.status,
       routerLoginId: routerLoginId || existingClient.routerLoginId,
-      routerLoginPassword: routerLoginPassword || existingClient.routerLoginPassword,
+      routerLoginPassword:
+        routerLoginPassword || existingClient.routerLoginPassword,
     };
 
     // Update password if provided
@@ -462,8 +469,8 @@ const updateClient = async (req, res, next) => {
         ...clientData,
         nidPhoto: {
           frontSide: updatedClient.nidPhotoFrontSide || "",
-          backSide: updatedClient.nidPhotoBackSide || ""
-        }
+          backSide: updatedClient.nidPhotoBackSide || "",
+        },
       },
     });
   } catch (error) {
@@ -521,16 +528,16 @@ const getClientsByReferCode = async (req, res, next) => {
 
     // Transform response
     const transformedClients = await Promise.all(
-      clients.map((client) => transformClientWithPackage(client))
+      clients.map((client) => transformClientWithPackage(client)),
     );
 
     // Add nidPhoto to transformed clients
-    const clientsWithNidPhotos = transformedClients.map(client => ({
+    const clientsWithNidPhotos = transformedClients.map((client) => ({
       ...client,
       nidPhoto: {
         frontSide: client.nidPhotoFrontSide || "",
-        backSide: client.nidPhotoBackSide || ""
-      }
+        backSide: client.nidPhotoBackSide || "",
+      },
     }));
 
     const totalPages = Math.ceil(count / limitNumber);
@@ -581,8 +588,8 @@ const updateClientStatus = async (req, res, next) => {
         ...clientData,
         nidPhoto: {
           frontSide: updatedClient.nidPhotoFrontSide || "",
-          backSide: updatedClient.nidPhotoBackSide || ""
-        }
+          backSide: updatedClient.nidPhotoBackSide || "",
+        },
       },
     });
   } catch (error) {
@@ -641,7 +648,7 @@ const getClientStats = async (req, res, next) => {
           packagePrice: packageDetails ? packageDetails.packagePrice : null,
           count: pkg.count,
         };
-      })
+      }),
     );
 
     // Count by location
@@ -669,26 +676,6 @@ const getClientStats = async (req, res, next) => {
     next(error);
   }
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 //!___________________________________________________________________________________________________________________________________________________________________________________
 //! Helper function to generate unique employee ID
@@ -732,42 +719,6 @@ const generateUniqueEmployeeId = async (fullName) => {
   }
 };
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 //! Create Authority/Employee
 const createAuthority = async (req, res, next) => {
   try {
@@ -798,7 +749,14 @@ const createAuthority = async (req, res, next) => {
     } = req.body;
 
     // Validate required fields
-    if (!fullName || !email || !mobileNo || !role || !dateOfBirth || !nidOrPassportNo) {
+    if (
+      !fullName ||
+      !email ||
+      !mobileNo ||
+      !role ||
+      !dateOfBirth ||
+      !nidOrPassportNo
+    ) {
       return res.status(400).json({
         message:
           "Full name, email, mobile number, role, date of birth, and NID/Passport number are required!",
@@ -846,28 +804,26 @@ const createAuthority = async (req, res, next) => {
     // TEMPORARY FIX: Manually generate an ID
     // Get the maximum id from the database
     const maxIdResult = await AuthorityInformation.findOne({
-      attributes: [
-        [sequelize.fn('MAX', sequelize.col('id')), 'maxId']
-      ],
-      raw: true
+      attributes: [[sequelize.fn("MAX", sequelize.col("id")), "maxId"]],
+      raw: true,
     });
-    
+
     const nextId = (maxIdResult?.maxId || 0) + 1;
 
     // Parse NID photo data
     let nidPhotoData = {
       frontSide: "",
-      backSide: ""
+      backSide: "",
     };
 
     if (nidPhoto) {
-      if (typeof nidPhoto === 'string') {
+      if (typeof nidPhoto === "string") {
         try {
           nidPhotoData = JSON.parse(nidPhoto);
         } catch (error) {
           console.log("Error parsing nidPhoto string:", error);
         }
-      } else if (typeof nidPhoto === 'object') {
+      } else if (typeof nidPhoto === "object") {
         nidPhotoData = nidPhoto;
       }
     }
@@ -917,21 +873,22 @@ const createAuthority = async (req, res, next) => {
         ...newEntry.toJSON(),
         nidPhoto: {
           frontSide: newEntry.nidPhotoFrontSide,
-          backSide: newEntry.nidPhotoBackSide
-        }
+          backSide: newEntry.nidPhotoBackSide,
+        },
       },
     });
   } catch (error) {
     console.log("Error creating employee:", error);
-    
+
     // Provide more detailed error information
-    if (error.name === 'SequelizeUniqueConstraintError') {
+    if (error.name === "SequelizeUniqueConstraintError") {
       return res.status(400).json({
-        message: "Database error: Duplicate primary key. Please contact administrator to fix the database.",
-        error: error.errors.map(e => e.message).join(', ')
+        message:
+          "Database error: Duplicate primary key. Please contact administrator to fix the database.",
+        error: error.errors.map((e) => e.message).join(", "),
       });
     }
-    
+
     next(error);
   }
 };
@@ -1009,9 +966,10 @@ const getAllAuthorities = async (req, res, next) => {
       sex: employee.sex,
       maritalStatus: employee.maritalStatus,
       nidOrPassportNo: employee.nidOrPassportNo,
-      nidPhoto: { // Include NID photos
+      nidPhoto: {
+        // Include NID photos
         frontSide: employee.nidPhotoFrontSide || "",
-        backSide: employee.nidPhotoBackSide || ""
+        backSide: employee.nidPhotoBackSide || "",
       },
       bloodGroup: employee.bloodGroup,
       religion: employee.religion,
@@ -1088,9 +1046,10 @@ const getEmployeeById = async (req, res, next) => {
       sex: employee.sex,
       maritalStatus: employee.maritalStatus,
       nidOrPassportNo: employee.nidOrPassportNo,
-      nidPhoto: { // Include NID photos
+      nidPhoto: {
+        // Include NID photos
         frontSide: employee.nidPhotoFrontSide || "",
-        backSide: employee.nidPhotoBackSide || ""
+        backSide: employee.nidPhotoBackSide || "",
       },
       bloodGroup: employee.bloodGroup,
       religion: employee.religion,
@@ -1183,17 +1142,17 @@ const updateEmployee = async (req, res, next) => {
     // Parse NID photo data
     let nidPhotoData = {
       frontSide: existingEmployee.nidPhotoFrontSide || "",
-      backSide: existingEmployee.nidPhotoBackSide || ""
+      backSide: existingEmployee.nidPhotoBackSide || "",
     };
 
     if (nidPhoto) {
-      if (typeof nidPhoto === 'string') {
+      if (typeof nidPhoto === "string") {
         try {
           nidPhotoData = JSON.parse(nidPhoto);
         } catch (error) {
           console.log("Error parsing nidPhoto string:", error);
         }
-      } else if (typeof nidPhoto === 'object') {
+      } else if (typeof nidPhoto === "object") {
         nidPhotoData = nidPhoto;
       }
     }
@@ -1282,9 +1241,10 @@ const updateEmployee = async (req, res, next) => {
       sex: updatedEmployee.sex,
       maritalStatus: updatedEmployee.maritalStatus,
       nidOrPassportNo: updatedEmployee.nidOrPassportNo,
-      nidPhoto: { // Include NID photos
+      nidPhoto: {
+        // Include NID photos
         frontSide: updatedEmployee.nidPhotoFrontSide || "",
-        backSide: updatedEmployee.nidPhotoBackSide || ""
+        backSide: updatedEmployee.nidPhotoBackSide || "",
       },
       bloodGroup: updatedEmployee.bloodGroup,
       religion: updatedEmployee.religion,
@@ -1318,20 +1278,6 @@ const updateEmployee = async (req, res, next) => {
     next(error);
   }
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 //! Toggle Employee Status
 const toggleEmployeeStatus = async (req, res, next) => {
@@ -1765,4 +1711,7 @@ module.exports = {
   transformClientWithPackage,
 
   checkUserCredentials,
+
+  //! Now client according to the package will be available from all file.
+  getPackageDetails,
 };
