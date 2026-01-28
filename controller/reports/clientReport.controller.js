@@ -458,8 +458,7 @@ const getClientPackageDistributionReport = async (req, res, next) => {
           },
         });
 
-        const monthlyRevenue =
-          activeClients * (parseFloat(pkg.packagePrice) || 0);
+        const monthlyRevenue = activeClients * (parseFloat(pkg.packagePrice) || 0);
         const annualRevenue = monthlyRevenue * 12;
 
         // Get ALL clients for this package with pagination
@@ -524,21 +523,6 @@ const getClientPackageDistributionReport = async (req, res, next) => {
           }),
         );
 
-        // Get location distribution for this package
-        const locationDistribution = await ClientInformation.findAll({
-          where: {
-            ...whereClause,
-            package: pkg.id,
-          },
-          attributes: [
-            "location",
-            [sequelize.fn("COUNT", sequelize.col("id")), "count"],
-            [sequelize.fn("SUM", sequelize.col("costForPackage")), "revenue"],
-          ],
-          group: ["location"],
-          order: [["count", "DESC"]],
-        });
-
         // Calculate growth rate
         const clientGrowthRate = await calculateGrowthRate(pkg.id, whereClause);
 
@@ -567,7 +551,6 @@ const getClientPackageDistributionReport = async (req, res, next) => {
           estimatedAnnualRevenue: annualRevenue,
 
           holderClients: transformedHolderClients,
-          locationDistribution: locationDistribution.map((loc) => loc.toJSON()),
 
           clientGrowthRate: clientGrowthRate,
         };
@@ -773,7 +756,7 @@ function generatePackageRecommendations(packageDistribution) {
   if (underperforming.length > 0) {
     recommendations.push({
       type: "WARNING",
-      message: `${underperforming.length} packages have less than 5 clients. Consider reviewing or discontinuing these packages.`,
+      message: `${underperforming.length} packages have less than 5 clients: `,
       packages: underperforming.map((pkg) => pkg.packageName),
     });
   }
@@ -845,7 +828,7 @@ function generatePackageRecommendations(packageDistribution) {
   if (underperforming.length > 0) {
     recommendations.push({
       type: "WARNING",
-      message: `${underperforming.length} packages have less than 5 clients. Consider reviewing or discontinuing these packages.`,
+      message: `${underperforming.length} packages have less than 5 clients: `,
       packages: underperforming.map((pkg) => pkg.packageName),
     });
   }
@@ -1258,6 +1241,16 @@ const getClientLocationReport = async (req, res, next) => {
   }
 };
 
+
+
+
+
+
+
+
+
+
+
 //! 5. REFERRAL CLIENT REPORT - UPDATED
 const getReferralClientReport = async (req, res, next) => {
   try {
@@ -1271,6 +1264,9 @@ const getReferralClientReport = async (req, res, next) => {
       page = 1,
       limit = 20,
     } = req.query;
+
+    //! DEFINE COMMISSION AMOUNT PER ACTIVE REFERRAL (200 taka)
+    const COMMISSION_PER_ACTIVE_REFERRAL = 200;
 
     const pageNumber = parseInt(page, 10);
     const limitNumber = parseInt(limit, 10);
@@ -1302,15 +1298,21 @@ const getReferralClientReport = async (req, res, next) => {
         [sequelize.fn("COUNT", sequelize.col("id")), "referralCount"],
         [
           sequelize.literal(
-            `SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END)`,
+            `SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END)`
           ),
           "activeReferrals",
         ],
         [
           sequelize.literal(
-            `SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END)`,
+            `SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END)`
           ),
           "pendingReferrals",
+        ],
+        [
+          sequelize.literal(
+            `SUM(CASE WHEN status = 'active' THEN ${COMMISSION_PER_ACTIVE_REFERRAL} ELSE 0 END)`
+          ),
+          "totalCommission",
         ],
         [sequelize.fn("SUM", sequelize.col("costForPackage")), "totalRevenue"],
         [sequelize.fn("AVG", sequelize.col("costForPackage")), "avgRevenue"],
@@ -1363,7 +1365,7 @@ const getReferralClientReport = async (req, res, next) => {
           ],
         });
 
-        let referrerType = "client";
+        let referrerTypeDB = "client";
 
         if (!referrer) {
           referrer = await AuthorityInformation.findOne({
@@ -1381,7 +1383,7 @@ const getReferralClientReport = async (req, res, next) => {
               "baseSalary",
             ],
           });
-          referrerType = "employee";
+          referrerTypeDB = "employee";
         }
 
         // If referrer not found, skip
@@ -1421,6 +1423,9 @@ const getReferralClientReport = async (req, res, next) => {
           referredClients.map(async (client) => {
             const clientData = client.toJSON();
 
+            // Calculate commission for this referral (200 taka for active clients)
+            const commissionAmount = clientData.status === 'active' ? COMMISSION_PER_ACTIVE_REFERRAL : 0;
+
             // Get package details if package exists
             if (clientData.package) {
               const packageDetails = await getPackageDetails(
@@ -1457,6 +1462,11 @@ const getReferralClientReport = async (req, res, next) => {
               costForPackage: clientData.costForPackage,
               createdAt: clientData.createdAt,
               addedByDetails: addedByDetails,
+              commission: {
+                amount: commissionAmount,
+                status: "pending", // Since we don't have payment tracking
+                eligible: clientData.status === 'active',
+              },
             };
           }),
         );
@@ -1464,10 +1474,11 @@ const getReferralClientReport = async (req, res, next) => {
         // Calculate success rate
         const totalReferrals = parseInt(referrerData.referralCount || 0);
         const activeReferrals = parseInt(referrerData.activeReferrals || 0);
+        const totalCommission = parseFloat(referrerData.totalCommission || 0);
         const successRate =
           totalReferrals > 0
             ? ((activeReferrals / totalReferrals) * 100).toFixed(2)
-            : 0;
+            : "0.00";
 
         return {
           referrer: {
@@ -1477,7 +1488,7 @@ const getReferralClientReport = async (req, res, next) => {
             mobileNo: referrerInfo.mobileNo,
             email: referrerInfo.email,
             photo: referrerInfo.photo,
-            type: referrerType,
+            type: referrerTypeDB,
             role: referrerInfo.role,
             status: referrerInfo.status,
             location: referrerInfo.location,
@@ -1492,6 +1503,10 @@ const getReferralClientReport = async (req, res, next) => {
             pendingReferrals: parseInt(referrerData.pendingReferrals || 0),
             totalRevenue: parseFloat(referrerData.totalRevenue || 0),
             avgRevenue: parseFloat(referrerData.avgRevenue || 0),
+            totalCommission: totalCommission,
+            avgCommissionPerReferral: totalReferrals > 0 ? (totalCommission / totalReferrals).toFixed(2) : "0.00",
+            pendingCommission: totalCommission, // All commission is pending since no payment tracking
+            paidCommission: 0,
             successRate: successRate + "%",
           },
           referredClients: transformedReferredClients,
@@ -1530,9 +1545,15 @@ const getReferralClientReport = async (req, res, next) => {
         [sequelize.fn("COUNT", sequelize.col("id")), "referralCount"],
         [
           sequelize.literal(
-            `SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END)`,
+            `SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END)`
           ),
           "activeReferrals",
+        ],
+        [
+          sequelize.literal(
+            `SUM(CASE WHEN status = 'active' THEN ${COMMISSION_PER_ACTIVE_REFERRAL} ELSE 0 END)`
+          ),
+          "commission",
         ],
         [sequelize.fn("SUM", sequelize.col("costForPackage")), "revenue"],
       ],
@@ -1546,27 +1567,7 @@ const getReferralClientReport = async (req, res, next) => {
       limit: 12,
     });
 
-    // 5. REFERRER TYPE DISTRIBUTION
-    const referrerTypeDistribution = await Promise.all(
-      ["client", "employee"].map(async (type) => {
-        const referralIds = filteredReferrers
-          .filter((item) => item.referrer.type === type)
-          .map((item) => item.referrer.userId);
-
-        return {
-          referrerType: type,
-          count: referralIds.length,
-          percentage:
-            filteredReferrers.length > 0
-              ? ((referralIds.length / filteredReferrers.length) * 100).toFixed(
-                  2,
-                ) + "%"
-              : "0%",
-        };
-      }),
-    );
-
-    // 6. CALCULATE OVERALL PERFORMANCE METRICS
+    // 5. CALCULATE OVERALL PERFORMANCE METRICS
     const totalReferrals = filteredReferrers.reduce(
       (sum, item) => sum + item.referralStats.totalReferrals,
       0,
@@ -1587,24 +1588,40 @@ const getReferralClientReport = async (req, res, next) => {
       0,
     );
 
+    const totalCommission = filteredReferrers.reduce(
+      (sum, item) => sum + item.referralStats.totalCommission,
+      0,
+    );
+
+    const pendingCommission = filteredReferrers.reduce(
+      (sum, item) => sum + item.referralStats.pendingCommission,
+      0,
+    );
+
+    const paidCommission = filteredReferrers.reduce(
+      (sum, item) => sum + item.referralStats.paidCommission,
+      0,
+    );
+
     const avgRevenuePerReferral =
       totalReferrals > 0 ? totalRevenue / totalReferrals : 0;
     const conversionRate =
       totalReferrals > 0
         ? ((activeReferrals / totalReferrals) * 100).toFixed(2)
-        : 0;
+        : "0.00";
 
-    // 7. TOP PERFORMING REFERRERS (by revenue)
+    // 6. TOP PERFORMING REFERRERS (by commission earned)
     const topPerformingReferrers = [...filteredReferrers]
       .sort(
-        (a, b) => b.referralStats.totalRevenue - a.referralStats.totalRevenue,
+        (a, b) => b.referralStats.totalCommission - a.referralStats.totalCommission,
       )
       .slice(0, 5)
       .map((item) => ({
         referrerName: item.referrer.fullName,
         referrerType: item.referrer.type,
         totalReferrals: item.referralStats.totalReferrals,
-        totalRevenue: item.referralStats.totalRevenue,
+        activeReferrals: item.referralStats.activeReferrals,
+        totalCommission: item.referralStats.totalCommission,
         successRate: item.referralStats.successRate,
       }));
 
@@ -1621,6 +1638,12 @@ const getReferralClientReport = async (req, res, next) => {
           status,
           referrerId,
         },
+        commissionSettings: {
+          commissionPerActiveReferral: COMMISSION_PER_ACTIVE_REFERRAL,
+          currency: "BDT (Taka)",
+          eligibility: "Only for active referrals",
+          note: "Commission tracking is calculated on-the-fly. No payment tracking available without database changes.",
+        },
         summary: {
           totalReferrers: filteredReferrers.length,
           totalReferrals: totalReferrals,
@@ -1628,6 +1651,10 @@ const getReferralClientReport = async (req, res, next) => {
           pendingReferrals: pendingReferrals,
           totalRevenue: totalRevenue.toFixed(2),
           avgRevenuePerReferral: avgRevenuePerReferral.toFixed(2),
+          totalCommission: totalCommission.toFixed(2),
+          pendingCommission: pendingCommission.toFixed(2),
+          paidCommission: paidCommission.toFixed(2),
+          avgCommissionPerActiveReferral: COMMISSION_PER_ACTIVE_REFERRAL.toFixed(2),
           conversionRate: conversionRate + "%",
           activeReferralRate:
             totalReferrals > 0
@@ -1635,7 +1662,6 @@ const getReferralClientReport = async (req, res, next) => {
               : "0%",
         },
         analytics: {
-          referrerTypeDistribution,
           monthlyReferralTrend: monthlyReferralTrend.map((trend) =>
             trend.toJSON(),
           ),
