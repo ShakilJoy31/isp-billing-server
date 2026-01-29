@@ -4,8 +4,9 @@ const { Expense, ExpensePayment } = require("../../models/expense/expense.model"
 const ExpenseCategory = require("../../models/expense/category.model");
 const ExpenseSubCategory = require("../../models/expense/sub-category.model");
 const BankAccount = require("../../models/account/account.model");
+const ClientInformation = require("../../models/Authentication/client.model");
 
-//! Create new expense with multiple payments
+//! Create new expense with multiple payments (with client expense support)
 const createExpense = async (req, res, next) => {
   const transaction = await sequelize.transaction();
   
@@ -17,7 +18,9 @@ const createExpense = async (req, res, next) => {
       totalAmount,
       date,
       image,
-      payments
+      payments,
+      isClientExpense = false,
+      clientId = null
     } = req.body;
 
     // Validate required fields
@@ -66,6 +69,34 @@ const createExpense = async (req, res, next) => {
         return res.status(400).json({
           success: false,
           message: "Expense subcategory not found, inactive, or doesn't belong to the selected category"
+        });
+      }
+    }
+
+    // Validate client expense if marked as client expense
+    if (isClientExpense) {
+      if (!clientId) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: "Client ID is required for client expense"
+        });
+      }
+
+      // Check if client exists
+      const client = await ClientInformation.findOne({
+        where: { 
+          id: clientId,
+          status: 'Active'
+        },
+        transaction
+      });
+
+      if (!client) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: "Client not found or inactive"
         });
       }
     }
@@ -119,10 +150,12 @@ const createExpense = async (req, res, next) => {
       totalAmount,
       date,
       image,
+      isClientExpense,
+      clientId: isClientExpense ? clientId : null,
       createdBy: req.user?.id || 'admin'
     }, { transaction });
 
-    // ============ CRITICAL: Create payment records ============
+    // ============ Create payment records ============
     for (const payment of payments) {
       await ExpensePayment.create({
         expenseId: newExpense.id,
@@ -132,7 +165,7 @@ const createExpense = async (req, res, next) => {
         createdBy: req.user?.id || 'admin'
       }, { transaction });
     }
-    // ============ END CRITICAL SECTION ============
+    // ============ END PAYMENT CREATION ============
 
     await transaction.commit();
 
@@ -152,12 +185,24 @@ const createExpense = async (req, res, next) => {
           required: false
         },
         {
+          model: ClientInformation,
+          as: 'client',
+          attributes: [
+            'id', 'customerId', 'userId', 'fullName', 'photo', 
+            'fatherOrSpouseName', 'dateOfBirth', 'age', 'sex', 
+            'maritalStatus', 'nidOrPassportNo', 'mobileNo', 'email', 
+            'customerType', 'package', 'location', 'area', 'flatAptNo', 
+            'houseNo', 'roadNo', 'landmark', 'status'
+          ],
+          required: false
+        },
+        {
           model: ExpensePayment,
           as: 'payments',
           include: [{
             model: BankAccount,
             as: 'account',
-            attributes: ['id', 'accountName', 'accountNumber', 'bankName', 'currentBalance']
+            attributes: ['id', 'accountName', 'accountNumber', 'bankName', 'currentBalance', 'accountHolderName']
           }]
         }
       ]
@@ -171,6 +216,17 @@ const createExpense = async (req, res, next) => {
   } catch (error) {
     await transaction.rollback();
     console.error("Error creating expense:", error);
+    
+    // Handle validation errors
+    if (error.name === 'SequelizeValidationError') {
+      const messages = error.errors.map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: "Validation error",
+        errors: messages
+      });
+    }
+    
     next(error);
   }
 };
@@ -191,6 +247,7 @@ const getAllExpenses = async (req, res, next) => {
       minAmount,
       maxAmount,
       isActive,
+      isClientExpense,
       sortBy = 'createdAt',
       sortOrder = 'DESC'
     } = req.query;
@@ -216,9 +273,13 @@ const getAllExpenses = async (req, res, next) => {
       whereClause.paymentStatus = paymentStatus;
     }
     
-    // Handle boolean filter
+    // Handle boolean filters
     if (isActive !== undefined && isActive !== '') {
       whereClause.isActive = isActive === 'true' || isActive === '1' || isActive === true;
+    }
+    
+    if (isClientExpense !== undefined && isClientExpense !== '') {
+      whereClause.isClientExpense = isClientExpense === 'true' || isClientExpense === '1' || isClientExpense === true;
     }
     
     // Date range filter
@@ -261,13 +322,29 @@ const getAllExpenses = async (req, res, next) => {
 
     const validSortFields = [
       'date', 'totalAmount', 'status', 'paymentStatus', 
-      'createdAt', 'updatedAt', 'expenseCode'
+      'createdAt', 'updatedAt', 'expenseCode', 'isClientExpense'
     ];
     const finalSortBy = validSortFields.includes(sortBy) ? sortBy : 'createdAt';
 
-    // Query with includes
-    const expenses = await Expense.findAndCountAll({
+    // First, get the expense IDs with pagination
+    const expenseIdsResult = await Expense.findAndCountAll({
       where: whereClause,
+      attributes: ['id'],
+      order: [[finalSortBy, finalSortOrder]],
+      limit: parseInt(limit),
+      offset: offset,
+      distinct: true
+    });
+
+    const expenseIds = expenseIdsResult.rows.map(expense => expense.id);
+
+    // Then, get full expense details with all payments for those IDs
+    const expenses = await Expense.findAll({
+      where: {
+        id: {
+          [Op.in]: expenseIds
+        }
+      },
       include: [
         {
           model: ExpenseCategory,
@@ -281,6 +358,18 @@ const getAllExpenses = async (req, res, next) => {
           required: false
         },
         {
+          model: ClientInformation,
+          as: 'client',
+          attributes: [
+            'id', 'customerId', 'userId', 'fullName', 'photo', 
+            'fatherOrSpouseName', 'dateOfBirth', 'age', 'sex', 
+            'maritalStatus', 'nidOrPassportNo', 'mobileNo', 'email', 
+            'customerType', 'package', 'location', 'area', 'flatAptNo', 
+            'houseNo', 'roadNo', 'landmark', 'status'
+          ],
+          required: false
+        },
+        {
           model: ExpensePayment,
           as: 'payments',
           include: [{
@@ -290,19 +379,16 @@ const getAllExpenses = async (req, res, next) => {
           }]
         }
       ],
-      order: [[finalSortBy, finalSortOrder]],
-      limit: parseInt(limit),
-      offset: offset,
-      distinct: true
+      order: [[finalSortBy, finalSortOrder]]
     });
 
     return res.status(200).json({
       success: true,
       message: "Expenses retrieved successfully!",
-      data: expenses.rows,
+      data: expenses,
       meta: {
-        totalItems: expenses.count,
-        totalPages: Math.ceil(expenses.count / parseInt(limit)),
+        totalItems: expenseIdsResult.count,
+        totalPages: Math.ceil(expenseIdsResult.count / parseInt(limit)),
         currentPage: parseInt(page),
         itemsPerPage: parseInt(limit)
       }
@@ -312,6 +398,14 @@ const getAllExpenses = async (req, res, next) => {
     next(error);
   }
 };
+
+
+
+
+
+
+
+
 
 //! Get expense by ID
 const getExpenseById = async (req, res, next) => {
@@ -340,12 +434,24 @@ const getExpenseById = async (req, res, next) => {
           required: false
         },
         {
+          model: ClientInformation,
+          as: 'client',
+          attributes: [
+            'id', 'customerId', 'userId', 'fullName', 'photo', 
+            'fatherOrSpouseName', 'dateOfBirth', 'age', 'sex', 
+            'maritalStatus', 'nidOrPassportNo', 'mobileNo', 'email', 
+            'customerType', 'package', 'location', 'area', 'flatAptNo', 
+            'houseNo', 'roadNo', 'landmark', 'status'
+          ],
+          required: false
+        },
+        {
           model: ExpensePayment,
           as: 'payments',
           include: [{
             model: BankAccount,
             as: 'account',
-            attributes: ['id', 'accountName', 'accountNumber', 'bankName', 'currentBalance']
+            attributes: ['id', 'accountName', 'accountNumber', 'bankName', 'currentBalance', 'accountHolderName']
           }]
         }
       ]
@@ -402,7 +508,7 @@ const updateExpense = async (req, res, next) => {
 
     // Check if expense is already approved (restrict updates)
     if (expense.status === 'Approved' || expense.status === 'Paid') {
-      const allowedFields = ['note', 'image', 'rejectionReason'];
+      const allowedFields = ['note', 'image', 'rejectionReason', 'isClientExpense'];
       const updateKeys = Object.keys(updateData);
       
       const hasDisallowedUpdates = updateKeys.some(key => !allowedFields.includes(key));
@@ -411,8 +517,45 @@ const updateExpense = async (req, res, next) => {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: "Cannot update expense details after approval. Only note, image, and rejection reason can be updated."
+          message: "Cannot update expense details after approval. Only note, image, rejection reason, and client expense status can be updated."
         });
+      }
+    }
+
+    // Validate client expense if being updated
+    if (updateData.isClientExpense !== undefined) {
+      // If marking as client expense, validate client ID
+      if (updateData.isClientExpense) {
+        if (!updateData.clientId && !expense.clientId) {
+          await transaction.rollback();
+          return res.status(400).json({
+            success: false,
+            message: "Client ID is required for client expense"
+          });
+        }
+        
+        // Check if client exists
+        const clientId = updateData.clientId || expense.clientId;
+        if (clientId) {
+          const client = await ClientInformation.findOne({
+            where: { 
+              id: clientId,
+              status: 'Active'
+            },
+            transaction
+          });
+
+          if (!client) {
+            await transaction.rollback();
+            return res.status(400).json({
+              success: false,
+              message: "Client not found or inactive"
+            });
+          }
+        }
+      } else {
+        // If not a client expense, clear clientId
+        updateData.clientId = null;
       }
     }
 
@@ -463,6 +606,20 @@ const updateExpense = async (req, res, next) => {
         });
       }
 
+      // Validate payments
+      const totalPaymentAmount = updateData.payments.reduce((sum, payment) => {
+        return sum + parseFloat(payment.paymentAmount || 0);
+      }, 0);
+
+      const expenseTotal = updateData.totalAmount || expense.totalAmount;
+      if (Math.abs(totalPaymentAmount - parseFloat(expenseTotal)) > 0.01) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          message: "Total payment amount does not match expense total amount"
+        });
+      }
+
       // Delete existing payments
       await ExpensePayment.destroy({
         where: { expenseId: expense.id },
@@ -510,12 +667,24 @@ const updateExpense = async (req, res, next) => {
           required: false
         },
         {
+          model: ClientInformation,
+          as: 'client',
+          attributes: [
+            'id', 'customerId', 'userId', 'fullName', 'photo', 
+            'fatherOrSpouseName', 'dateOfBirth', 'age', 'sex', 
+            'maritalStatus', 'nidOrPassportNo', 'mobileNo', 'email', 
+            'customerType', 'package', 'location', 'area', 'flatAptNo', 
+            'houseNo', 'roadNo', 'landmark', 'status'
+          ],
+          required: false
+        },
+        {
           model: ExpensePayment,
           as: 'payments',
           include: [{
             model: BankAccount,
             as: 'account',
-            attributes: ['id', 'accountName', 'accountNumber', 'bankName']
+            attributes: ['id', 'accountName', 'accountNumber', 'bankName', 'accountHolderName']
           }]
         }
       ]
@@ -529,6 +698,17 @@ const updateExpense = async (req, res, next) => {
   } catch (error) {
     await transaction.rollback();
     console.error("Error updating expense:", error);
+    
+    // Handle validation errors
+    if (error.name === 'SequelizeValidationError') {
+      const messages = error.errors.map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: "Validation error",
+        errors: messages
+      });
+    }
+    
     next(error);
   }
 };
@@ -560,6 +740,12 @@ const deleteExpense = async (req, res, next) => {
         success: false,
         message: "Cannot delete approved or paid expense"
       });
+    }
+
+    // If it's a client expense, warn the user
+    if (expense.isClientExpense) {
+      // This is just a warning, we still allow deletion
+      console.log(`Deleting client expense: ${expense.expenseCode} for client ID: ${expense.clientId}`);
     }
 
     await expense.destroy();
@@ -615,12 +801,6 @@ const approveExpense = async (req, res, next) => {
 
     console.log('Expense:', expense.expenseCode);
     console.log('Number of payments found:', expensePayments.length);
-    console.log('Payments:', expensePayments.map(p => ({
-      id: p.id,
-      amount: p.paymentAmount,
-      accountId: p.accountId,
-      accountName: p.account?.accountName
-    })));
 
     if (expensePayments.length === 0) {
       await transaction.rollback();
@@ -715,7 +895,9 @@ const approveExpense = async (req, res, next) => {
         status: 'Approved',
         paymentStatus: 'Paid',
         approvedBy: expense.approvedBy,
-        approvedAt: expense.approvedAt
+        approvedAt: expense.approvedAt,
+        isClientExpense: expense.isClientExpense,
+        clientId: expense.clientId
       }
     });
   } catch (error) {
@@ -798,7 +980,9 @@ const rejectExpense = async (req, res, next) => {
         expenseId: expense.id,
         expenseCode: expense.expenseCode,
         status: 'Rejected',
-        rejectionReason
+        rejectionReason,
+        isClientExpense: expense.isClientExpense,
+        clientId: expense.clientId
       }
     });
   } catch (error) {
@@ -810,7 +994,7 @@ const rejectExpense = async (req, res, next) => {
 //! Get expense statistics
 const getExpenseStats = async (req, res, next) => {
   try {
-    const { startDate, endDate, expenseCategoryId } = req.query;
+    const { startDate, endDate, expenseCategoryId, isClientExpense } = req.query;
 
     const whereClause = { isActive: true };
     
@@ -828,6 +1012,11 @@ const getExpenseStats = async (req, res, next) => {
     // Category filter
     if (expenseCategoryId && expenseCategoryId !== '') {
       whereClause.expenseCategoryId = parseInt(expenseCategoryId);
+    }
+
+    // Client expense filter
+    if (isClientExpense !== undefined && isClientExpense !== '') {
+      whereClause.isClientExpense = isClientExpense === 'true' || isClientExpense === '1' || isClientExpense === true;
     }
 
     // Get total statistics
@@ -863,6 +1052,17 @@ const getExpenseStats = async (req, res, next) => {
       ]
     });
 
+    // Get client expense statistics
+    const clientExpenseStats = await Expense.findAll({
+      attributes: [
+        'isClientExpense',
+        [sequelize.fn('COUNT', sequelize.col('id')), 'count'],
+        [sequelize.fn('SUM', sequelize.col('totalAmount')), 'totalAmount']
+      ],
+      where: whereClause,
+      group: ['isClientExpense']
+    });
+
     // Get monthly trend (last 6 months)
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
@@ -886,12 +1086,18 @@ const getExpenseStats = async (req, res, next) => {
       where: whereClause,
       order: [['createdAt', 'DESC']],
       limit: 5,
-      attributes: ['id', 'expenseCode', 'note', 'totalAmount', 'status', 'date'],
+      attributes: ['id', 'expenseCode', 'note', 'totalAmount', 'status', 'date', 'isClientExpense'],
       include: [
         {
           model: ExpenseCategory,
           as: 'category',
           attributes: ['categoryName']
+        },
+        {
+          model: ClientInformation,
+          as: 'client',
+          attributes: ['fullName'],
+          required: false
         }
       ]
     });
@@ -905,6 +1111,7 @@ const getExpenseStats = async (req, res, next) => {
         averageAmount: totalExpenses > 0 ? (totalAmount || 0) / totalExpenses : 0,
         statusBreakdown: statusStats,
         categoryBreakdown: categoryStats,
+        clientExpenseStats,
         monthlyTrend,
         recentExpenses
       }
@@ -919,7 +1126,7 @@ const getExpenseStats = async (req, res, next) => {
 const getExpensesByCategory = async (req, res, next) => {
   try {
     const { categoryId } = req.params;
-    const { status, startDate, endDate } = req.query;
+    const { status, startDate, endDate, isClientExpense } = req.query;
     
     if (!categoryId || isNaN(categoryId)) {
       return res.status(400).json({ 
@@ -950,6 +1157,11 @@ const getExpensesByCategory = async (req, res, next) => {
       whereClause.status = status;
     }
     
+    // Client expense filter
+    if (isClientExpense !== undefined && isClientExpense !== '') {
+      whereClause.isClientExpense = isClientExpense === 'true' || isClientExpense === '1' || isClientExpense === true;
+    }
+    
     // Date range filter
     if (startDate || endDate) {
       whereClause.date = {};
@@ -969,6 +1181,12 @@ const getExpensesByCategory = async (req, res, next) => {
           model: ExpenseSubCategory,
           as: 'subcategory',
           attributes: ['subCategoryName'],
+          required: false
+        },
+        {
+          model: ClientInformation,
+          as: 'client',
+          attributes: ['id', 'fullName', 'mobileNo'],
           required: false
         },
         {
@@ -1009,7 +1227,7 @@ const getExpensesByCategory = async (req, res, next) => {
 const getExpensesByAccount = async (req, res, next) => {
   try {
     const { accountId } = req.params;
-    const { status, startDate, endDate } = req.query;
+    const { status, startDate, endDate, isClientExpense } = req.query;
     
     if (!accountId || isNaN(accountId)) {
       return res.status(400).json({ 
@@ -1030,19 +1248,35 @@ const getExpensesByAccount = async (req, res, next) => {
       });
     }
 
+    // Build where clause for expense payments
+    const paymentWhereClause = { accountId: parseInt(accountId) };
+    
+    // Build where clause for expenses
+    const expenseWhereClause = { isActive: true };
+    
+    if (isClientExpense !== undefined && isClientExpense !== '') {
+      expenseWhereClause.isClientExpense = isClientExpense === 'true' || isClientExpense === '1' || isClientExpense === true;
+    }
+
     // Find expenses that have payments from this account
     const expensePayments = await ExpensePayment.findAll({
-      where: { accountId: parseInt(accountId) },
+      where: paymentWhereClause,
       include: [
         {
           model: Expense,
           as: 'expense',
-          where: { isActive: true },
+          where: expenseWhereClause,
           include: [
             {
               model: ExpenseCategory,
               as: 'category',
               attributes: ['categoryName']
+            },
+            {
+              model: ClientInformation,
+              as: 'client',
+              attributes: ['id', 'fullName'],
+              required: false
             }
           ]
         }
@@ -1151,6 +1385,103 @@ const toggleExpenseStatus = async (req, res, next) => {
   }
 };
 
+//! Get expenses by client
+const getExpensesByClient = async (req, res, next) => {
+  try {
+    const { clientId } = req.params;
+    const { status, startDate, endDate } = req.query;
+    
+    if (!clientId || isNaN(clientId)) {
+      return res.status(400).json({ 
+        success: false,
+        message: "Invalid client ID" 
+      });
+    }
+
+    // Check if client exists
+    const client = await ClientInformation.findOne({
+      where: { id: parseInt(clientId) }
+    });
+
+    if (!client) {
+      return res.status(404).json({ 
+        success: false,
+        message: "Client not found" 
+      });
+    }
+
+    const whereClause = { 
+      clientId: parseInt(clientId),
+      isClientExpense: true,
+      isActive: true 
+    };
+    
+    // Handle status filter
+    if (status && status !== '') {
+      whereClause.status = status;
+    }
+    
+    // Date range filter
+    if (startDate || endDate) {
+      whereClause.date = {};
+      if (startDate && startDate !== '') {
+        whereClause.date[Op.gte] = new Date(startDate);
+      }
+      if (endDate && endDate !== '') {
+        whereClause.date[Op.lte] = new Date(endDate);
+      }
+    }
+
+    const expenses = await Expense.findAll({
+      where: whereClause,
+      order: [['date', 'DESC']],
+      include: [
+        {
+          model: ExpenseCategory,
+          as: 'category',
+          attributes: ['categoryName']
+        },
+        {
+          model: ExpenseSubCategory,
+          as: 'subcategory',
+          attributes: ['subCategoryName'],
+          required: false
+        },
+        {
+          model: ExpensePayment,
+          as: 'payments',
+          include: [{
+            model: BankAccount,
+            as: 'account',
+            attributes: ['accountName', 'bankName']
+          }]
+        }
+      ]
+    });
+
+    const totalAmount = await Expense.sum('totalAmount', { where: whereClause });
+
+    return res.status(200).json({
+      success: true,
+      message: `Expenses for client ${client.fullName} retrieved successfully!`,
+      data: {
+        client: {
+          id: client.id,
+          fullName: client.fullName,
+          customerId: client.customerId,
+          mobileNo: client.mobileNo
+        },
+        expenses: expenses,
+        count: expenses.length,
+        totalAmount: totalAmount || 0
+      }
+    });
+  } catch (error) {
+    console.error("Error retrieving expenses by client:", error);
+    next(error);
+  }
+};
+
 module.exports = {
   createExpense,
   getAllExpenses,
@@ -1162,5 +1493,6 @@ module.exports = {
   getExpenseStats,
   getExpensesByCategory,
   getExpensesByAccount,
+  getExpensesByClient,
   toggleExpenseStatus
 };

@@ -3,6 +3,8 @@ const sequelize = require("../../database/connection");
 const ExpenseCategory = require("./category.model");
 const ExpenseSubCategory = require("./sub-category.model");
 const BankAccount = require("../account/account.model");
+// Import Client model - make sure you have this model
+const ClientInformation = require("../Authentication/client.model");
 
 const Expense = sequelize.define(
   "Expense",
@@ -86,6 +88,28 @@ const Expense = sequelize.define(
       allowNull: false,
       defaultValue: true,
     },
+    // ============ NEW FIELDS FOR CLIENT EXPENSE ============
+    isClientExpense: {
+      type: dt.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    clientId: {
+      type: dt.INTEGER,
+      allowNull: true,
+      references: {
+        model: ClientInformation,
+        key: 'id'
+      },
+      validate: {
+        // Client ID is required if isClientExpense is true
+        clientIdRequired(value) {
+          if (this.isClientExpense && (!value || value === 0)) {
+            throw new Error('Client ID is required for client expenses');
+          }
+        }
+      }
+    },
   },
   {
     hooks: {
@@ -101,8 +125,17 @@ const Expense = sequelize.define(
         if (!expense.date) {
           expense.date = new Date().toISOString().split('T')[0];
         }
+        
+        // Validate client expense consistency
+        if (expense.isClientExpense && (!expense.clientId || expense.clientId === 0)) {
+          throw new Error('Client ID is required for client expenses');
+        }
+        
+        // Reset clientId if not a client expense
+        if (!expense.isClientExpense) {
+          expense.clientId = null;
+        }
       }
-      // REMOVED: afterUpdate hook
     },
     indexes: [
       {
@@ -123,6 +156,12 @@ const Expense = sequelize.define(
       },
       {
         fields: ["isActive"],
+      },
+      {
+        fields: ["isClientExpense"],
+      },
+      {
+        fields: ["clientId"],
       },
       {
         fields: ["createdAt"],
@@ -190,7 +229,9 @@ const ExpensePayment = sequelize.define(
   }
 );
 
-// Define associations (keep these)
+// ============ DEFINE ASSOCIATIONS ============
+
+// Expense associations with Category and SubCategory
 Expense.belongsTo(ExpenseCategory, {
   foreignKey: 'expenseCategoryId',
   as: 'category'
@@ -201,6 +242,14 @@ Expense.belongsTo(ExpenseSubCategory, {
   as: 'subcategory'
 });
 
+// Expense association with Client
+Expense.belongsTo(ClientInformation, {
+  foreignKey: 'clientId',
+  as: 'client',
+  onDelete: 'SET NULL'
+});
+
+// Expense association with Payments
 Expense.hasMany(ExpensePayment, {
   foreignKey: 'expenseId',
   as: 'payments',
@@ -217,6 +266,7 @@ ExpensePayment.belongsTo(BankAccount, {
   as: 'account'
 });
 
+// Reverse associations
 BankAccount.hasMany(ExpensePayment, {
   foreignKey: 'accountId',
   as: 'expensePayments'
@@ -229,6 +279,11 @@ ExpenseCategory.hasMany(Expense, {
 
 ExpenseSubCategory.hasMany(Expense, {
   foreignKey: 'expenseSubcategoryId',
+  as: 'expenses'
+});
+
+ClientInformation.hasMany(Expense, {
+  foreignKey: 'clientId',
   as: 'expenses'
 });
 

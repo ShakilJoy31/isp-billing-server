@@ -4,6 +4,10 @@ const ClientInformation = require("../../models/Authentication/client.model");
 const generateUniqueUserId = require("../../utils/helper/generateUniqueId");
 const Package = require("../../models/package/package.model");
 const sequelize = require("../../database/connection");
+const ExpenseCategory = require("../../models/expense/category.model");
+const ExpenseSubCategory = require("../../models/expense/sub-category.model");
+const { ExpensePayment, Expense } = require("../../models/expense/expense.model");
+const BankAccount = require("../../models/account/account.model");
 
 //! Helper function to get package details
 const getPackageDetails = async (packageId) => {
@@ -196,7 +200,7 @@ const createClient = async (req, res, next) => {
   }
 };
 
-//! Get all clients with pagination and filtering
+//! Get all clients with pagination, filtering, and expense information
 const getAllClients = async (req, res, next) => {
   try {
     const {
@@ -233,6 +237,7 @@ const getAllClients = async (req, res, next) => {
     if (location) whereClause.location = location;
     if (package) whereClause.package = package;
 
+    // First, get the clients without expense associations
     const { count, rows: clients } = await ClientInformation.findAndCountAll({
       where: whereClause,
       limit: limitNumber,
@@ -243,7 +248,109 @@ const getAllClients = async (req, res, next) => {
 
     // Transform each client with package details
     const transformedClients = await Promise.all(
-      clients.map((client) => transformClientWithPackage(client)),
+      clients.map(async (client) => {
+        const transformedClient = await transformClientWithPackage(client);
+        
+        // Now get expenses for this client separately
+        const clientExpenses = await Expense.findAll({
+          where: {
+            clientId: client.id,
+            isClientExpense: true
+          },
+          attributes: ['id', 'expenseCode', 'totalAmount', 'date', 'status', 'paymentStatus', 'note'],
+          order: [['date', 'DESC']],
+          limit: 5,
+          include: [
+            {
+              model: ExpenseCategory,
+              as: 'category',
+              attributes: ['id', 'categoryName', 'categoryCode']
+            },
+            {
+              model: ExpenseSubCategory,
+              as: 'subcategory',
+              attributes: ['id', 'subCategoryName', 'subCategoryCode']
+            },
+            {
+              model: ExpensePayment,
+              as: 'payments',
+              attributes: ['id', 'paymentAmount', 'status'],
+              include: [
+                {
+                  model: BankAccount,
+                  as: 'account',
+                  attributes: ['id', 'accountName', 'bankName']
+                }
+              ]
+            }
+          ]
+        });
+        
+        // Calculate expense statistics
+        const totalExpenseAmount = clientExpenses.reduce((sum, expense) => 
+          sum + parseFloat(expense.totalAmount || 0), 0
+        );
+        
+        // Count expenses by status
+        const expenseStats = {
+          total: clientExpenses.length,
+          pending: clientExpenses.filter(e => e.status === 'Pending').length,
+          approved: clientExpenses.filter(e => e.status === 'Approved').length,
+          paid: clientExpenses.filter(e => e.paymentStatus === 'Paid').length,
+          partiallyPaid: clientExpenses.filter(e => e.paymentStatus === 'Partially_Paid').length,
+          rejected: clientExpenses.filter(e => e.status === 'Rejected').length,
+          totalAmount: totalExpenseAmount
+        };
+
+        // Get latest expense
+        const latestExpense = clientExpenses.length > 0 ? clientExpenses[0] : null;
+
+        // Format expenses for response
+        const formattedExpenses = clientExpenses.map(expense => ({
+          id: expense.id,
+          expenseCode: expense.expenseCode,
+          totalAmount: expense.totalAmount,
+          date: expense.date,
+          status: expense.status,
+          paymentStatus: expense.paymentStatus,
+          note: expense.note,
+          category: expense.category ? {
+            id: expense.category.id,
+            name: expense.category.categoryName,
+            code: expense.category.categoryCode
+          } : null,
+          subcategory: expense.subcategory ? {
+            id: expense.subcategory.id,
+            name: expense.subcategory.subCategoryName,
+            code: expense.subcategory.subCategoryCode
+          } : null,
+          payments: expense.payments ? expense.payments.map(payment => ({
+            id: payment.id,
+            amount: payment.paymentAmount,
+            status: payment.status,
+            account: payment.account ? {
+              id: payment.account.id,
+              name: payment.account.accountName,
+              bank: payment.account.bankName
+            } : null
+          })) : []
+        }));
+
+        return {
+          ...transformedClient,
+          expenses: {
+            stats: expenseStats,
+            list: formattedExpenses,
+            latest: latestExpense ? {
+              id: latestExpense.id,
+              expenseCode: latestExpense.expenseCode,
+              amount: latestExpense.totalAmount,
+              date: latestExpense.date,
+              status: latestExpense.status
+            } : null
+          }
+        };
+      }),
     );
 
     // Add nidPhoto to transformed clients
@@ -258,7 +365,7 @@ const getAllClients = async (req, res, next) => {
     const totalPages = Math.ceil(count / limitNumber);
 
     return res.status(200).json({
-      message: "Clients retrieved successfully!",
+      message: "Clients retrieved successfully with expense information!",
       data: clientsWithNidPhotos,
       pagination: {
         totalItems: count,
@@ -268,7 +375,7 @@ const getAllClients = async (req, res, next) => {
       },
     });
   } catch (error) {
-    console.error("Error getting all clients:", error);
+    console.error("Error getting all clients with expense info:", error);
     next(error);
   }
 };
