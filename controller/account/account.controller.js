@@ -309,6 +309,15 @@ const updateBankAccount = async (req, res, next) => {
 
 //! Update account balance
 const updateAccountBalance = async (req, res, next) => {
+  // Format currency helper function
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat("en-BD", {
+      style: "currency",
+      currency: "BDT",
+      minimumFractionDigits: 2,
+    }).format(amount);
+  };
+
   try {
     const { id } = req.params;
     const { amount, transactionType, description } = req.body;
@@ -406,15 +415,6 @@ const updateAccountBalance = async (req, res, next) => {
       updatedBy: req.user?.id || "admin",
     });
 
-    // Format currency helper function
-    const formatCurrency = (amount) => {
-      return new Intl.NumberFormat("en-BD", {
-        style: "currency",
-        currency: "BDT",
-        minimumFractionDigits: 2,
-      }).format(amount);
-    };
-
     return res.status(200).json({
       success: true,
       message: `Account balance ${transactionType === "deposit" ? "increased" : "decreased"} successfully!`,
@@ -479,7 +479,6 @@ const deleteBankAccount = async (req, res, next) => {
     next(error);
   }
 };
-
 
 const deleteBankAccountEntry = async (req, res, next) => {
   try {
@@ -675,8 +674,6 @@ const getAccountsByType = async (req, res, next) => {
   }
 };
 
-
-
 module.exports = {
   createBankAccount,
   getAllBankAccounts,
@@ -687,5 +684,5 @@ module.exports = {
   getAccountsByBranch,
   getAccountsByType,
   updateAccountBalance,
-  deleteBankAccountEntry
+  deleteBankAccountEntry,
 };

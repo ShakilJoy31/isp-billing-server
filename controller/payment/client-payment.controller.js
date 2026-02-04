@@ -867,6 +867,7 @@ const getPaidMonthsForUser = async (req, res) => {
     const transactionPayments = await Transaction.findAll({
       where: {
         userId: numericUserIds,
+        status: "approved"
       },
       attributes: ['id', 'userId', 'billingMonth', 'billingYear', 'status', 'amount']
     });

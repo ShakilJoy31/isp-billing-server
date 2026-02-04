@@ -1,5 +1,7 @@
 const express = require("express");
 const { createReminder, createBulkReminders, getAllReminders, getReminderById, updateReminder, deleteReminder, sendReminder, cancelReminder, getReminderStats, getUserWarningStatus } = require("../controller/reminder/reminder.controller");
+const { updateContact, deleteContact } = require("../controller/live-chat/public-contact.controller");
+const { bulkDeleteContacts, getContactStats, createPublicContact, getAllPublicContacts, getPublicContactById, updatePublicContact, deletePublicContact, bulkDeletePublicContacts, getPublicContactStats } = require("../controller/reminder/publicContact.controller");
 
 
 const router = express.Router();
@@ -19,5 +21,23 @@ router.post("/send-reminder/:id", sendReminder);
 router.post("/cancel-reminder/:id", cancelReminder);
 
 router.get("/reminder-stats", getReminderStats);
+
+
+
+
+
+
+
+
+
+
+//! public contact routes
+router.post("/create-contact", createPublicContact);
+router.get("/get-all-contacts", getAllPublicContacts);
+router.get("/get-contact/:id", getPublicContactById);
+router.put("/update-contact/:id", updatePublicContact);
+router.delete("/delete-contact/:id", deletePublicContact);
+router.post("/bulk-delete-contacts", bulkDeletePublicContacts);
+router.get("/contact-stats", getPublicContactStats);
 
 module.exports = reminderRoutes = router;
