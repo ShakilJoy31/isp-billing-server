@@ -4,7 +4,8 @@ const ClientInformation = require("../../models/Authentication/client.model");
 const Transaction = require("../../models/payment/client-payment.model");
 const EmployeePayment = require("../../models/payment/employee-payment.model");
 const { transformClientWithPackage } = require("../auth/signup");
-
+const { sendMessage } = require("../live-chat/liveChat.controller");
+const { sendSMSHelper } = require("../../utils/helper/sendSMS");
 
 //! Creating transaction.........
 const createTransaction = async (req, res) => {
@@ -42,9 +43,9 @@ const createTransaction = async (req, res) => {
     // Format the billing month for EmployeePayment comparison
     // From your data: "April" + "2026" = "April 2026"
     const employeeBillingMonth = `${billingMonth} ${billingYear}`;
-    
-    console.log('Checking EmployeePayment for:', employeeBillingMonth, userId);
-    
+
+    console.log("Checking EmployeePayment for:", employeeBillingMonth, userId);
+
     const existingPaymentByEmployee = await EmployeePayment.findOne({
       where: {
         clientId: clientId,
@@ -53,7 +54,7 @@ const createTransaction = async (req, res) => {
       },
     });
 
-    console.log('Existing Employee Payment:', existingPaymentByEmployee);
+    console.log("Existing Employee Payment:", existingPaymentByEmployee);
 
     if (existingPayment) {
       return res.status(409).json({
@@ -125,28 +126,18 @@ const createTransaction = async (req, res) => {
   }
 };
 
-
-
-
-
-
-
-
-
-
-
 //! Get trx by user ID.
 const getTransactionsByUserId = async (req, res) => {
   try {
     const { userId } = req.params;
-    const {clientId} = req.params;
+    const { clientId } = req.params;
     const { page = 1, limit = 10 } = req.query;
 
     const pageNumber = parseInt(page, 10);
     const limitNumber = parseInt(limit, 10);
     const offset = (pageNumber - 1) * limitNumber;
 
-    console.log(clientId, userId)
+    console.log(clientId, userId);
 
     const totalItems = await Transaction.count({ where: { userId } });
 
@@ -157,7 +148,6 @@ const getTransactionsByUserId = async (req, res) => {
       order: [["createdAt", "DESC"]],
     });
 
-
     const transactionsByRingtel = await EmployeePayment.findAll({
       where: { clientId: clientId },
       limit: limitNumber,
@@ -166,7 +156,6 @@ const getTransactionsByUserId = async (req, res) => {
     });
 
     // console.log('employee ppppp'+transactionsByRingtel)
-    
 
     if (transactions.length === 0 && transactionsByRingtel.length === 0) {
       return res.status(404).json({
@@ -199,25 +188,18 @@ const getTransactionsByUserId = async (req, res) => {
   }
 };
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 //! Update transaction status
 const updateTransactionStatus = async (req, res) => {
   try {
     const { transactionId } = req.params;
-    const { status, approvedBy, approvalRemark, rejectedBy, rejectionReason } =
-      req.body;
+    const {
+      status,
+      approvedBy,
+      approvalRemark,
+      rejectedBy,
+      rejectionReason,
+      userId,
+    } = req.body;
 
     if (!status) {
       return res.status(400).json({
@@ -286,6 +268,15 @@ const updateTransactionStatus = async (req, res) => {
 
     const updatedTransaction = await Transaction.findByPk(transactionId);
 
+    if (status.toLowerCase() === "approved") {
+      const client = await ClientInformation.findOne({
+        where: { id: userId },
+        attributes: { exclude: ["password"] },
+      });
+      const result = await sendSMSHelper("Bill collection", client.mobileNo);
+      const adminCopySms = await sendSMSHelper("Bill collection", '+8801684175551');
+    }
+
     res.status(200).json({
       success: true,
       message: `Transaction status updated to ${status} successfully`,
@@ -300,20 +291,6 @@ const updateTransactionStatus = async (req, res) => {
     });
   }
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 //! Get all transactions with filtering and pagination (for admin dashboard)
 const getAllTransactions = async (req, res) => {
@@ -386,7 +363,7 @@ const getAllTransactions = async (req, res) => {
       ...new Set(
         transactions
           .map((t) => t.userId)
-          .filter((id) => id && id !== null && id !== undefined)
+          .filter((id) => id && id !== null && id !== undefined),
       ),
     ];
 
@@ -395,7 +372,7 @@ const getAllTransactions = async (req, res) => {
       ...new Set(
         transactions
           .flatMap((t) => [t.approvedBy, t.rejectedBy])
-          .filter((id) => id && id !== null && id !== undefined)
+          .filter((id) => id && id !== null && id !== undefined),
       ),
     ];
 
@@ -518,14 +495,6 @@ const getAllTransactions = async (req, res) => {
     });
   }
 };
-
-
-
-
-
-
-
-
 
 //! Get transaction by ID
 const getTransactionById = async (req, res) => {
@@ -831,70 +800,73 @@ const getUserPaymentHistory = async (req, res) => {
   }
 };
 
-
-
-
-
-
-
-//! Getting paid month according to the client. 
+//! Getting paid month according to the client.
 const getPaidMonthsForUser = async (req, res) => {
   try {
     const { userId } = req.params;
-    
+
     if (!userId) {
       return res.status(400).json({
         success: false,
-        message: "User ID is required"
+        message: "User ID is required",
       });
     }
 
     const clientInfos = await ClientInformation.findAll({
       where: { userId: userId },
-      attributes: ['id', 'fullName']
+      attributes: ["id", "fullName"],
     });
 
     if (!clientInfos || clientInfos.length === 0) {
       return res.status(404).json({
         success: false,
-        message: `User not found: ${userId}`
+        message: `User not found: ${userId}`,
       });
     }
 
-    const numericUserIds = clientInfos.map(client => client.id.toString());
+    const numericUserIds = clientInfos.map((client) => client.id.toString());
 
     // Step 2: Get ALL payments from Transaction table for ALL numeric IDs
     const transactionPayments = await Transaction.findAll({
       where: {
         userId: numericUserIds,
-        status: "approved"
+        status: "approved",
       },
-      attributes: ['id', 'userId', 'billingMonth', 'billingYear', 'status', 'amount']
+      attributes: [
+        "id",
+        "userId",
+        "billingMonth",
+        "billingYear",
+        "status",
+        "amount",
+      ],
     });
 
     // Step 3: Get payments from EmployeePayment table
     const employeePayments = await EmployeePayment.findAll({
       where: {
         clientId: userId,
-        status: ["collected", "verified", "deposited"]
+        status: ["collected", "verified", "deposited"],
       },
-      attributes: ['id', 'billingMonth', 'amount', 'status']
+      attributes: ["id", "billingMonth", "amount", "status"],
     });
 
-    transactionPayments.forEach(payment => {
-      console.log(`- ID: ${payment.id}, UserId: ${payment.userId}, Month: ${payment.billingMonth} ${payment.billingYear}, Status: ${payment.status}`);
+    transactionPayments.forEach((payment) => {
+      console.log(
+        `- ID: ${payment.id}, UserId: ${payment.userId}, Month: ${payment.billingMonth} ${payment.billingYear}, Status: ${payment.status}`,
+      );
     });
 
     // Step 5: Combine and format all paid months
     const paidMonthsSet = new Set();
 
     // Add from transaction payments (format: "January 2026")
-    transactionPayments.forEach(payment => {
+    transactionPayments.forEach((payment) => {
       paidMonthsSet.add(`${payment.billingMonth} ${payment.billingYear}`);
     });
 
     // Add from employee payments (already in format: "June 2026")
-    employeePayments.forEach(payment => {
+    employeePayments.forEach((payment) => {
       if (payment.billingMonth) {
         paidMonthsSet.add(payment.billingMonth);
       }
@@ -902,43 +874,48 @@ const getPaidMonthsForUser = async (req, res) => {
 
     // Convert to array and sort chronologically
     const paidMonthsArray = Array.from(paidMonthsSet);
-    
+
     // Sort chronologically (oldest first)
     paidMonthsArray.sort((a, b) => {
       const months = [
-        "January", "February", "March", "April", "May", "June",
-        "July", "August", "September", "October", "November", "December"
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
       ];
-      
-      const [monthA, yearA] = a.split(' ');
-      const [monthB, yearB] = b.split(' ');
-      
+
+      const [monthA, yearA] = a.split(" ");
+      const [monthB, yearB] = b.split(" ");
+
       if (parseInt(yearA) !== parseInt(yearB)) {
         return parseInt(yearA) - parseInt(yearB);
       }
-      
+
       return months.indexOf(monthA) - months.indexOf(monthB);
     });
 
     res.status(200).json({
       success: true,
       message: `Paid months for ${userId}`,
-      data: paidMonthsArray
+      data: paidMonthsArray,
     });
-
   } catch (error) {
     console.error("Error fetching paid months:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch paid months",
-      error: error.message
+      error: error.message,
     });
   }
 };
-
-
-
-
 
 module.exports = {
   createTransaction,
@@ -950,5 +927,5 @@ module.exports = {
   bulkUpdateTransactionStatus,
   checkPaymentEligibility,
   getUserPaymentHistory,
-  getPaidMonthsForUser
+  getPaidMonthsForUser,
 };

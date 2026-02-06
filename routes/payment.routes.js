@@ -39,6 +39,8 @@ router.get("/collection-stats/:employeeId", getEmployeeCollectionStats);
 router.get("/payment-details/:paymentId", getPaymentDetails);
 router.put("/update-payment/:paymentId", updateEmployeePayment);
 
+
+
 //! Super Admin routes
 router.get("/all-collections", getAllEmployeeCollections);
 router.put("/verify-payment/:paymentId", verifyPayment);

@@ -1,5 +1,6 @@
+const AuthorityInformation = require("../../models/Authentication/authority.model");
 const Salary = require("../../models/salary/salary.model");
-
+const { sendSMSHelper } = require("../../utils/helper/sendSMS");
 
 // Create new salary record
 const createSalary = async (req, res, next) => {
@@ -34,13 +35,21 @@ const createSalary = async (req, res, next) => {
       paymentDate,
       paymentMethod,
       bankAccount,
-      note
+      note,
     } = req.body;
 
     // Validate required fields
-    if (!employeeId || !employeeName || !department || !designation || !salaryMonth || !salaryYear) {
-      return res.status(400).json({ 
-        message: "Missing required fields: employeeId, employeeName, department, designation, salaryMonth, salaryYear" 
+    if (
+      !employeeId ||
+      !employeeName ||
+      !department ||
+      !designation ||
+      !salaryMonth ||
+      !salaryYear
+    ) {
+      return res.status(400).json({
+        message:
+          "Missing required fields: employeeId, employeeName, department, designation, salaryMonth, salaryYear",
       });
     }
 
@@ -49,13 +58,14 @@ const createSalary = async (req, res, next) => {
       where: {
         employeeId,
         salaryMonth,
-        salaryYear
-      }
+        salaryYear,
+      },
     });
 
     if (existingSalary) {
-      return res.status(400).json({ 
-        message: "Salary record already exists for this employee for the specified month" 
+      return res.status(400).json({
+        message:
+          "Salary record already exists for this employee for the specified month",
       });
     }
 
@@ -86,17 +96,25 @@ const createSalary = async (req, res, next) => {
       performanceBonus: performanceBonus || 0,
       festivalBonus: festivalBonus || 0,
       otherBonuses: otherBonuses || 0,
-      paymentStatus: paymentStatus || 'pending',
+      paymentStatus: paymentStatus || "pending",
       paymentDate,
       paymentMethod,
       bankAccount,
-      createdBy: req.user?.id || 'admin', // Assuming you have user info in req.user
-      note
+      createdBy: req.user?.id || "admin", // Assuming you have user info in req.user
+      note,
     });
+
+    if (paymentStatus === "paid") {
+      const employee = await AuthorityInformation.findOne({
+        where: { userId: employeeId },
+      });
+      const result = await sendSMSHelper("Salary receive", employee.mobileNo);
+      const adminCopySms = await sendSMSHelper("Salary receive", '+8801684175551');
+    }
 
     return res.status(201).json({
       message: "Salary record created successfully!",
-      salary: newSalary
+      salary: newSalary,
     });
   } catch (error) {
     console.error("Error creating salary:", error);
@@ -107,19 +125,19 @@ const createSalary = async (req, res, next) => {
 // Get all salary records with optional filtering
 const getAllSalaries = async (req, res, next) => {
   try {
-    const { 
-      month, 
-      year, 
-      department, 
+    const {
+      month,
+      year,
+      department,
       paymentStatus,
       employeeId,
       page = 1,
-      limit = 10
+      limit = 10,
     } = req.query;
 
     // Build where clause for filtering
     const whereClause = {};
-    
+
     if (month) whereClause.salaryMonth = month;
     if (year) whereClause.salaryYear = parseInt(year);
     if (department) whereClause.department = department;
@@ -130,9 +148,9 @@ const getAllSalaries = async (req, res, next) => {
 
     const salaries = await Salary.findAndCountAll({
       where: whereClause,
-      order: [['createdAt', 'DESC']],
+      order: [["createdAt", "DESC"]],
       limit: parseInt(limit),
-      offset: offset
+      offset: offset,
     });
 
     return res.status(200).json({
@@ -140,7 +158,7 @@ const getAllSalaries = async (req, res, next) => {
       salaries: salaries.rows,
       totalCount: salaries.count,
       totalPages: Math.ceil(salaries.count / parseInt(limit)),
-      currentPage: parseInt(page)
+      currentPage: parseInt(page),
     });
   } catch (error) {
     console.error("Error retrieving salaries:", error);
@@ -165,7 +183,7 @@ const getSalaryById = async (req, res, next) => {
 
     return res.status(200).json({
       message: "Salary retrieved successfully!",
-      salary
+      salary,
     });
   } catch (error) {
     console.error("Error retrieving salary:", error);
@@ -187,9 +205,12 @@ const getSalariesByEmployee = async (req, res, next) => {
 
     const salaries = await Salary.findAndCountAll({
       where: { employeeId },
-      order: [['salaryYear', 'DESC'], ['salaryMonth', 'DESC']],
+      order: [
+        ["salaryYear", "DESC"],
+        ["salaryMonth", "DESC"],
+      ],
       limit: parseInt(limit),
-      offset: offset
+      offset: offset,
     });
 
     return res.status(200).json({
@@ -197,7 +218,7 @@ const getSalariesByEmployee = async (req, res, next) => {
       salaries: salaries.rows,
       totalCount: salaries.count,
       totalPages: Math.ceil(salaries.count / parseInt(limit)),
-      currentPage: parseInt(page)
+      currentPage: parseInt(page),
     });
   } catch (error) {
     console.error("Error retrieving employee salaries:", error);
@@ -205,12 +226,13 @@ const getSalariesByEmployee = async (req, res, next) => {
   }
 };
 
-// Update salary record
+//! Update salary record
 const updateSalary = async (req, res, next) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
 
+    console.log(updateData);
     if (!id || isNaN(id)) {
       return res.status(400).json({ message: "Invalid salary ID" });
     }
@@ -229,9 +251,17 @@ const updateSalary = async (req, res, next) => {
     // Update the salary record
     await salary.update(updateData);
 
+    if (updateData.paymentStatus === "paid") {
+      const employee = await AuthorityInformation.findOne({
+        where: { userId: updateData.employee },
+      });
+      const result = await sendSMSHelper("Salary receive", employee.mobileNo);
+      const adminCopySms = await sendSMSHelper("Salary receive", '+8801684175551');
+    }
+
     return res.status(200).json({
       message: "Salary record updated successfully!",
-      salary
+      salary,
     });
   } catch (error) {
     console.error("Error updating salary:", error);
@@ -257,7 +287,7 @@ const deleteSalary = async (req, res, next) => {
     await salary.destroy();
 
     return res.status(200).json({
-      message: "Salary record deleted successfully!"
+      message: "Salary record deleted successfully!",
     });
   } catch (error) {
     console.error("Error deleting salary:", error);
@@ -277,16 +307,16 @@ const getSalarySummary = async (req, res, next) => {
     const salaries = await Salary.findAll({
       where: whereClause,
       attributes: [
-        'paymentStatus',
-        [sequelize.fn('COUNT', sequelize.col('id')), 'count'],
-        [sequelize.fn('SUM', sequelize.col('netSalary')), 'totalAmount']
+        "paymentStatus",
+        [sequelize.fn("COUNT", sequelize.col("id")), "count"],
+        [sequelize.fn("SUM", sequelize.col("netSalary")), "totalAmount"],
       ],
-      group: ['paymentStatus']
+      group: ["paymentStatus"],
     });
 
     const totalEmployees = await Salary.count({ where: whereClause });
-    const totalPaid = await Salary.sum('netSalary', { 
-      where: { ...whereClause, paymentStatus: 'paid' } 
+    const totalPaid = await Salary.sum("netSalary", {
+      where: { ...whereClause, paymentStatus: "paid" },
     });
 
     return res.status(200).json({
@@ -294,8 +324,8 @@ const getSalarySummary = async (req, res, next) => {
       summary: {
         totalEmployees,
         totalPaid: totalPaid || 0,
-        statusBreakdown: salaries
-      }
+        statusBreakdown: salaries,
+      },
     });
   } catch (error) {
     console.error("Error retrieving salary summary:", error);
@@ -310,5 +340,5 @@ module.exports = {
   getSalariesByEmployee,
   updateSalary,
   deleteSalary,
-  getSalarySummary
+  getSalarySummary,
 };

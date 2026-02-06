@@ -5,7 +5,7 @@ const { createPublicContact, getAllPublicContacts, getPublicContactById, updateP
 
 const router = express.Router();
 
-// Reminder routes
+//! Reminder routes
 router.post("/create-reminder", createReminder);
 router.post("/create-bulk-reminders", createBulkReminders);
 router.get("/get-all-reminders", getAllReminders);

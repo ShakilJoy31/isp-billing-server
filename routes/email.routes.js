@@ -8,6 +8,7 @@ const {
   sendTransactionStatusEmail,
 } = require("../controller/email/email.controller");
 const { createEmail, getAllEmails, getEmailById, updateEmail, toggleEmailStatus, deleteEmail, getActiveEmails, getEmailStats } = require("../controller/email/emailManagement.controller");
+const { createSMS, getAllSMS, getSMSById, updateSMS, toggleSMSStatus, deleteSMS, getSMSStats, getActiveSMS, testSMS } = require("../controller/email/smsManagement.controller");
 const router = express.Router();
 
 //! Send account creation/welcome email to new client
@@ -27,27 +28,6 @@ router.post('/send-transaction-status-email', sendTransactionStatusEmail);
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 //! Email configuration.........................
 // Email Routes
 router.post("/add-new-email", createEmail);
@@ -57,5 +37,15 @@ router.put("/update-email/:id", updateEmail);
 router.put("/toggle-status/:id", toggleEmailStatus);
 router.delete("/delete-email/:id", deleteEmail);
 router.get("/stats", getEmailStats);
+
+
+//! SMS configuration routes....................
+router.post("/add-new-sms", createSMS);
+router.get("/get-sms", getAllSMS);
+router.get("/get-sms/:id", getSMSById);
+router.put("/update-sms/:id", updateSMS);
+router.delete("/delete-sms/:id", deleteSMS);
+router.post("/test-sms/:id", testSMS);
+
 
 module.exports = router;

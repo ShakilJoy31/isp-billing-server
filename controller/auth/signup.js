@@ -8,6 +8,7 @@ const ExpenseCategory = require("../../models/expense/category.model");
 const ExpenseSubCategory = require("../../models/expense/sub-category.model");
 const { ExpensePayment, Expense } = require("../../models/expense/expense.model");
 const BankAccount = require("../../models/account/account.model");
+const { sendSMSHelper } = require("../../utils/helper/sendSMS");
 
 //! Helper function to get package details
 const getPackageDetails = async (packageId) => {
@@ -181,8 +182,12 @@ const createClient = async (req, res, next) => {
       routerLoginPassword: routerLoginPassword || null,
     });
 
-    // Transform response with package details
+    //! Transform response with package details
     const clientData = await transformClientWithPackage(newClient);
+
+    //! Send welcome SMS to the new client
+    const smsResult = await sendSMSHelper("Account Creation", mobileNo);
+    const adminCopySms = await sendSMSHelper("Account Creation", '+8801684175551');
 
     return res.status(201).json({
       message: "Client created successfully!",

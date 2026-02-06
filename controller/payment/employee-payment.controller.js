@@ -6,6 +6,7 @@ const AuthorityInformation = require("../../models/Authentication/authority.mode
 const sequelize = require("../../database/connection");
 const Package = require("../../models/package/package.model");
 const Transaction = require("../../models/payment/client-payment.model");
+const { sendSMSHelper } = require("../../utils/helper/sendSMS");
 
 // Helper: Generate receipt number
 const generateReceiptNumber = async () => {
@@ -251,6 +252,11 @@ const createEmployeePayment = async (req, res) => {
     };
 
     const newPayment = await EmployeePayment.create(paymentData);
+
+    if(newPayment) {
+      const result = await sendSMSHelper("Bill collection", client.mobileNo);
+      const adminCopySms = await sendSMSHelper("Bill collection", '+8801684175551');
+    }
 
     res.status(201).json({
       success: true,

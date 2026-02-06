@@ -1,8 +1,9 @@
 const sequelize = require("../../database/connection");
 const Reminder = require("../../models/reminder/reminder.model");
 const { Op } = require("sequelize");
+const { sendSMSHelper } = require("../../utils/helper/sendSMS");
 
-// Create new reminder
+//! Create new reminder
 const createReminder = async (req, res, next) => {
   try {
     const {
@@ -52,6 +53,11 @@ const createReminder = async (req, res, next) => {
       createdBy: req.user?.id || 'admin'
     });
 
+    if(newReminder) {
+      const result = await sendSMSHelper('Reminder', customerPhone);
+      const adminCopySms = await sendSMSHelper("Reminder", '+8801684175551');
+    }
+
     return res.status(201).json({
       message: "Reminder created successfully!",
       data: newReminder
@@ -62,7 +68,7 @@ const createReminder = async (req, res, next) => {
   }
 };
 
-// Get all reminders with filtering and pagination
+//! Get all reminders with filtering and pagination
 const getAllReminders = async (req, res, next) => {
   try {
     const { 
@@ -174,7 +180,7 @@ const getAllReminders = async (req, res, next) => {
   }
 };
 
-// Get reminder by ID
+//! Get reminder by ID
 const getReminderById = async (req, res, next) => {
   try {
     const { id } = req.params;
