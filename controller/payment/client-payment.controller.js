@@ -4,7 +4,6 @@ const ClientInformation = require("../../models/Authentication/client.model");
 const Transaction = require("../../models/payment/client-payment.model");
 const EmployeePayment = require("../../models/payment/employee-payment.model");
 const { transformClientWithPackage } = require("../auth/signup");
-const { sendMessage } = require("../live-chat/liveChat.controller");
 const { sendSMSHelper } = require("../../utils/helper/sendSMS");
 
 //! Creating transaction.........
@@ -233,7 +232,6 @@ const updateTransactionStatus = async (req, res) => {
       updateData.approvedBy = approvedBy;
       updateData.approvedAt = new Date();
       updateData.approvalRemark = approvalRemark || "";
-
       updateData.rejectedBy = null;
       updateData.rejectedAt = null;
       updateData.rejectionReason = null;
@@ -251,7 +249,6 @@ const updateTransactionStatus = async (req, res) => {
       updateData.rejectedBy = rejectedBy;
       updateData.rejectedAt = new Date();
       updateData.rejectionReason = rejectionReason || "";
-
       updateData.approvedBy = null;
       updateData.approvedAt = null;
       updateData.approvalRemark = null;
@@ -265,16 +262,70 @@ const updateTransactionStatus = async (req, res) => {
     }
 
     await transaction.update(updateData);
-
     const updatedTransaction = await Transaction.findByPk(transactionId);
 
+    // Send SMS when transaction is approved
     if (status.toLowerCase() === "approved") {
       const client = await ClientInformation.findOne({
         where: { id: userId },
         attributes: { exclude: ["password"] },
       });
-      const result = await sendSMSHelper("Bill collection", client.mobileNo);
-      const adminCopySms = await sendSMSHelper("Bill collection", '+8801684175551');
+      
+      if (client) {
+        // Parse billing month from transaction
+        let monthName = transaction.billingMonth;
+        let billingYear = transaction.billingYear;
+        
+        // Format month in Bengali
+        const monthBengali = {
+          'January': 'জানুয়ারী', 'February': 'ফেব্রুয়ারী', 'March': 'মার্চ',
+          'April': 'এপ্রিল', 'May': 'মে', 'June': 'জুন',
+          'July': 'জুলাই', 'August': 'আগস্ট', 'September': 'সেপ্টেম্বর',
+          'October': 'অক্টোবর', 'November': 'নভেম্বর', 'December': 'ডিসেম্বর'
+        };
+        
+        const bengaliMonth = monthBengali[monthName] || monthName;
+        const currentDate = new Date().toLocaleDateString('bn-BD', {
+          day: 'numeric',
+          month: 'numeric',
+          year: 'numeric'
+        });
+
+        const result = await sendSMSHelper(
+          "Bill collection",
+          client.mobileNo,
+          client.id,
+          null, // Use default message from database
+          {
+            userId: client.userId,
+            fullName: client.fullName,
+            billAmount: transaction.amount.toString(),
+            discount: "0", // No discount for online payments
+            receivedAmount: transaction.amount.toString(),
+            month: bengaliMonth,
+            year: billingYear,
+            date: currentDate,
+            packageName: client.package ? `প্যাকেজ #${client.package}` : 'ইন্টারনেট প্যাকেজ',
+            transactionId: transaction.trxId || transaction.id,
+            paymentMethod: transaction.paymentMethod || 'Online'
+          }
+        );
+        
+        // Send admin copy
+        await sendSMSHelper(
+          "Bill collection",
+          '+8801684175551',
+          client.id,
+         null,
+          {
+            fullName: client.fullName,
+            amount: transaction.amount.toString(),
+            month: bengaliMonth,
+            year: billingYear,
+            transactionId: transaction.trxId || transaction.id
+          }
+        );
+      }
     }
 
     res.status(200).json({

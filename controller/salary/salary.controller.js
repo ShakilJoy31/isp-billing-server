@@ -53,6 +53,15 @@ const createSalary = async (req, res, next) => {
       });
     }
 
+    // Calculate total salary
+    const totalAllowances = (houseRent || 0) + (medicalAllowance || 0) + (travelAllowance || 0) + (otherAllowances || 0);
+    const totalBonuses = (performanceBonus || 0) + (festivalBonus || 0) + (otherBonuses || 0);
+    const totalDeductions = (providentFund || 0) + (taxDeduction || 0) + (otherDeductions || 0);
+    const overtimePay = (overtimeHours || 0) * (overtimeRate || 0);
+    
+    const grossSalary = (basicSalary || 0) + totalAllowances + overtimePay + totalBonuses;
+    const netSalary = grossSalary - totalDeductions;
+
     // Check if salary already exists for this employee and month
     const existingSalary = await Salary.findOne({
       where: {
@@ -92,7 +101,7 @@ const createSalary = async (req, res, next) => {
       unpaidLeaves: unpaidLeaves || 0,
       overtimeHours: overtimeHours || 0,
       overtimeRate: overtimeRate || 0,
-      overtimeAmount: overtimeAmount || 0,
+      overtimeAmount: overtimeAmount || overtimePay,
       performanceBonus: performanceBonus || 0,
       festivalBonus: festivalBonus || 0,
       otherBonuses: otherBonuses || 0,
@@ -100,16 +109,54 @@ const createSalary = async (req, res, next) => {
       paymentDate,
       paymentMethod,
       bankAccount,
-      createdBy: req.user?.id || "admin", // Assuming you have user info in req.user
+      createdBy: req.user?.id || "admin",
       note,
     });
 
+    // Send SMS if payment is paid
     if (paymentStatus === "paid") {
       const employee = await AuthorityInformation.findOne({
         where: { userId: employeeId },
       });
-      const result = await sendSMSHelper("Salary receive", employee.mobileNo);
-      const adminCopySms = await sendSMSHelper("Salary receive", '+8801684175551');
+      
+      if (employee) {
+        // Send SMS to employee with dynamic data
+        const result = await sendSMSHelper(
+          "Salary receive",
+          employee.mobileNo,
+          employee.id,
+          null, // Use default message from database
+          {
+            fullName: employee.fullName,
+            salaryAmount: netSalary.toFixed(2),
+            grossSalary: grossSalary.toFixed(2),
+            basicSalary: basicSalary || 0,
+            houseRent: houseRent || 0,
+            overtimeAmount: overtimePay.toFixed(2),
+            bonusAmount: totalBonuses.toFixed(2),
+            deductions: totalDeductions.toFixed(2),
+            salaryMonth: salaryMonth,
+            salaryYear: salaryYear,
+            designation: designation,
+            department: department,
+            paymentDate: paymentDate ? new Date(paymentDate).toLocaleDateString('bn-BD') : new Date().toLocaleDateString('bn-BD')
+          }
+        );
+        
+        // Send admin copy
+        await sendSMSHelper(
+          "Salary receive",
+          '+8801684175551',
+          employee.id,
+          null,
+          {
+            fullName: employee.fullName,
+            salaryAmount: netSalary.toFixed(2),
+            salaryMonth: salaryMonth,
+            salaryYear: salaryYear
+          }
+        );
+      }
     }
 
     return res.status(201).json({

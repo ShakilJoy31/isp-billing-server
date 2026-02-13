@@ -59,7 +59,7 @@ const createClient = async (req, res, next) => {
       sex,
       maritalStatus,
       nidOrPassportNo,
-      nidPhoto, // New field for NID photos
+      nidPhoto,
       jobPlaceName,
       jobCategory,
       customerId,
@@ -143,6 +143,9 @@ const createClient = async (req, res, next) => {
 
     // Generate unique IDs
     const userId = await generateUniqueUserId(fullName);
+    
+    // Set default password if not provided
+    const clientPassword = password || mobileNo;
 
     const newClient = await ClientInformation.create({
       customerId,
@@ -177,17 +180,64 @@ const createClient = async (req, res, next) => {
       referId: referId || null,
       role: role || "client",
       status: status || "pending",
-      password: password || mobileNo,
+      password: clientPassword,
       routerLoginId: routerLoginId || null,
       routerLoginPassword: routerLoginPassword || null,
     });
 
-    //! Transform response with package details
+    // Transform response with package details
     const clientData = await transformClientWithPackage(newClient);
 
-    //! Send welcome SMS to the new client
-    const smsResult = await sendSMSHelper("Account Creation", mobileNo);
-    const adminCopySms = await sendSMSHelper("Account Creation", '+8801684175551');
+    // Get package information for SMS
+    let packageCost = costForPackage || 0;
+
+    const packageInfo = await Package.findOne({
+      where: { id: package },
+    });
+
+     console.log({
+        fullName: fullName,
+        userId: userId,
+        password: clientPassword,
+        packageName: packageInfo.packageName,
+        billAmount: packageCost.toString(),
+        mobileNo: mobileNo,
+        email: email,
+        status: status || "pending"
+      })
+
+    // Send welcome SMS to the new client
+    const smsResult = await sendSMSHelper(
+      "Account Creation",
+      mobileNo,
+      newClient.id,
+      null, // Use default message from database
+      {
+        fullName: fullName,
+        userId: userId,
+        password: clientPassword,
+        packageName: packageInfo.packageName,
+        billAmount: packageCost.toString(),
+        mobileNo: mobileNo,
+        email: email,
+        status: status || "pending"
+      }
+    );
+
+    // Send admin copy
+    await sendSMSHelper(
+      "Account Creation",
+      '+8801684175551',
+      newClient.id,
+      null,
+      {
+        fullName: fullName,
+        userId: userId,
+        packageName: packageInfo.packageName,
+        billAmount: packageCost.toString(),
+        mobileNo: mobileNo
+      }
+    );
 
     return res.status(201).json({
       message: "Client created successfully!",

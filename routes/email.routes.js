@@ -8,7 +8,7 @@ const {
   sendTransactionStatusEmail,
 } = require("../controller/email/email.controller");
 const { createEmail, getAllEmails, getEmailById, updateEmail, toggleEmailStatus, deleteEmail, getActiveEmails, getEmailStats } = require("../controller/email/emailManagement.controller");
-const { createSMS, getAllSMS, getSMSById, updateSMS, toggleSMSStatus, deleteSMS, getSMSStats, getActiveSMS, testSMS } = require("../controller/email/smsManagement.controller");
+const { createSMS, getAllSMS, getSMSById, updateSMS, deleteSMS, testSMS } = require("../controller/email/smsManagement.controller");
 const router = express.Router();
 
 //! Send account creation/welcome email to new client
@@ -37,6 +37,15 @@ router.put("/update-email/:id", updateEmail);
 router.put("/toggle-status/:id", toggleEmailStatus);
 router.delete("/delete-email/:id", deleteEmail);
 router.get("/stats", getEmailStats);
+
+
+
+
+
+
+
+
+
 
 
 //! SMS configuration routes....................

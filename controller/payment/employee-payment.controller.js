@@ -59,61 +59,36 @@ const createEmployeePayment = async (req, res) => {
       });
     }
 
-    // Parse billingMonth - handle both "2026-01" and "January 2025" formats
+    // Parse billingMonth
     let monthName, billingYear, formattedBillingMonth;
-
-    // Check if format is YYYY-MM (e.g., "2026-01")
     const yyyyMmRegex = /^(\d{4})-(\d{2})$/;
-    // Check if format is Month YYYY (e.g., "January 2025")
     const monthYearRegex = /^(\w+)\s+(\d{4})$/;
 
     if (yyyyMmRegex.test(billingMonth)) {
-      // Format: YYYY-MM (e.g., "2026-01")
       const match = billingMonth.match(yyyyMmRegex);
       const year = match[1];
       const monthNum = parseInt(match[2], 10);
-
-      // Convert month number to month name
       const monthNames = [
-        "January",
-        "February",
-        "March",
-        "April",
-        "May",
-        "June",
-        "July",
-        "August",
-        "September",
-        "October",
-        "November",
-        "December",
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
       ];
-
-      if (monthNum < 1 || monthNum > 12) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid month number in billingMonth. Use 01-12",
-        });
-      }
-
       monthName = monthNames[monthNum - 1];
       billingYear = year;
       formattedBillingMonth = `${monthName} ${billingYear}`;
     } else if (monthYearRegex.test(billingMonth)) {
-      // Format: Month YYYY (e.g., "January 2025")
       const match = billingMonth.match(monthYearRegex);
       monthName = match[1];
       billingYear = match[2];
-      formattedBillingMonth = billingMonth; // Already in correct format
+      formattedBillingMonth = billingMonth;
     } else {
       return res.status(400).json({
         success: false,
         message:
-          "Invalid billing month format. Use 'YYYY-MM' (e.g., '2026-01') or 'Month YYYY' (e.g., 'January 2025')",
+          "Invalid billing month format. Use 'YYYY-MM' or 'Month YYYY'",
       });
     }
 
-    // FIRST: Find client to get their numeric ID
+    // Find client
     const client = await ClientInformation.findOne({
       where: { userId: clientUserId },
     });
@@ -125,17 +100,14 @@ const createEmployeePayment = async (req, res) => {
       });
     }
 
-    // First, get the user's actual ID from the User table
+    // Check for existing client transaction
     const user = await ClientInformation.findOne({
       where: { userId: clientUserId },
       attributes: ["id"],
     });
 
-    let existingClientTransaction = null;
-
     if (user) {
-      // Now query Transaction table with the numeric user ID
-      existingClientTransaction = await Transaction.findOne({
+      const existingClientTransaction = await Transaction.findOne({
         where: {
           userId: user.id.toString(),
           billingMonth: monthName,
@@ -145,24 +117,24 @@ const createEmployeePayment = async (req, res) => {
           },
         },
       });
-    }
 
-    if (existingClientTransaction) {
-      return res.status(409).json({
-        success: false,
-        message: `Client has already made a payment for ${monthName} ${billingYear} via self-payment.`,
-        data: {
-          existingTransaction: {
-            id: existingClientTransaction.id,
-            amount: existingClientTransaction.amount,
-            status: existingClientTransaction.status,
-            trxId: existingClientTransaction.trxId,
-            billingMonth: existingClientTransaction.billingMonth,
-            billingYear: existingClientTransaction.billingYear,
-            createdAt: existingClientTransaction.createdAt,
+      if (existingClientTransaction) {
+        return res.status(409).json({
+          success: false,
+          message: `Client has already made a payment for ${monthName} ${billingYear} via self-payment.`,
+          data: {
+            existingTransaction: {
+              id: existingClientTransaction.id,
+              amount: existingClientTransaction.amount,
+              status: existingClientTransaction.status,
+              trxId: existingClientTransaction.trxId,
+              billingMonth: existingClientTransaction.billingMonth,
+              billingYear: existingClientTransaction.billingYear,
+              createdAt: existingClientTransaction.createdAt,
+            },
           },
-        },
-      });
+        });
+      }
     }
 
     // Find employee
@@ -177,12 +149,11 @@ const createEmployeePayment = async (req, res) => {
       });
     }
 
-    // Check if payment already exists for this client for same month and year
-    // Use formattedBillingMonth for the check
+    // Check for existing payment
     const existingPayment = await EmployeePayment.findOne({
       where: {
         clientId: clientUserId,
-        billingMonth: formattedBillingMonth, // Use formatted version
+        billingMonth: formattedBillingMonth,
         status: {
           [Op.notIn]: ["cancelled", "refunded", "rejected"],
         },
@@ -209,53 +180,95 @@ const createEmployeePayment = async (req, res) => {
     // Generate receipt number
     const receiptNumber = await generateReceiptNumber();
 
+    // Calculate received amount
+    const receivedAmount = parseFloat(amount) - (parseFloat(discount) || 0);
+
     // Create payment record
     const paymentData = {
-      // Client Information
       clientId: clientUserId,
       clientName: client.fullName,
       clientPhone: client.mobileNo,
       clientAddress: `${client.flatAptNo}, ${client.houseNo}, ${client.roadNo}, ${client.area}`,
-
-      // Employee Information
       employeeId: employee.userId,
       employeeName: employee.fullName,
-
-      // Payment Information
-      invoiceId: `INV-${formattedBillingMonth.replace(/\s+/g, "-")}-${
-        client.customerId
-      }`,
-      billingMonth: formattedBillingMonth, // Store formatted version like "January 2025"
-      billingYear: billingYear, // Store year separately
+      invoiceId: `INV-${formattedBillingMonth.replace(/\s+/g, "-")}-${client.customerId}`,
+      billingMonth: formattedBillingMonth,
+      billingYear: billingYear,
       amount: parseFloat(amount),
       discount: parseFloat(discount) || 0,
-
-      // Payment Method
       paymentMethod: paymentMethod,
       paymentAccount: paymentAccount,
       transactionId: transactionId,
       referenceNote: referenceNote,
-
-      // Collection Details
       collectionDate: new Date(),
       collectionTime: moment().format("HH:mm:ss"),
-
-      // Receipt Information
       receiptNumber: receiptNumber,
-
-      // Status
       status: "collected",
-
-      // Metadata
       notes: notes,
       attachment: attachment,
     };
 
     const newPayment = await EmployeePayment.create(paymentData);
 
-    if(newPayment) {
-      const result = await sendSMSHelper("Bill collection", client.mobileNo);
-      const adminCopySms = await sendSMSHelper("Bill collection", '+8801684175551');
+    // Send SMS to client
+    if (newPayment) {
+      // Get package information
+      let packageName = "ইন্টারনেট প্যাকেজ";
+      if (client.package) {
+        const packageInfo = await Package.findByPk(client.package);
+        packageName = packageInfo?.name || `প্যাকেজ #${client.package}`;
+      }
+
+      // Format month in Bengali
+      const monthBengali = {
+        'January': 'জানুয়ারী', 'February': 'ফেব্রুয়ারী', 'March': 'মার্চ',
+        'April': 'এপ্রিল', 'May': 'মে', 'June': 'জুন',
+        'July': 'জুলাই', 'August': 'আগস্ট', 'September': 'সেপ্টেম্বর',
+        'October': 'অক্টোবর', 'November': 'নভেম্বর', 'December': 'ডিসেম্বর'
+      };
+      
+      const bengaliMonth = monthBengali[monthName] || monthName;
+      const currentDate = new Date().toLocaleDateString('bn-BD', {
+        day: 'numeric',
+        month: 'numeric',
+        year: 'numeric'
+      });
+
+      const result = await sendSMSHelper(
+        "Bill collection",
+        client.mobileNo,
+        client.id,
+        null, // Use default message from database
+        {
+          userId: client.userId,
+          fullName: client.fullName,
+          billAmount: amount.toString(),
+          discount: (parseFloat(discount) || 0).toString(),
+          receivedAmount: receivedAmount.toString(),
+          month: bengaliMonth,
+          year: billingYear,
+          date: currentDate,
+          packageName: packageName,
+          receiptNumber: receiptNumber,
+          collectorName: employee.fullName
+        }
+      );
+
+      // Send admin copy
+      await sendSMSHelper(
+        "Bill collection",
+        '+8801684175551',
+        client.id,
+        null,
+        {
+          fullName: client.fullName,
+          amount: amount.toString(),
+          month: bengaliMonth,
+          year: billingYear,
+          collectorName: employee.fullName,
+          receiptNumber: receiptNumber
+        }
+      );
     }
 
     res.status(201).json({
@@ -275,7 +288,6 @@ const createEmployeePayment = async (req, res) => {
   } catch (error) {
     console.error("Error creating employee payment:", error);
 
-    // Handle duplicate receipt number error
     if (error.name === "SequelizeUniqueConstraintError") {
       return res.status(409).json({
         success: false,

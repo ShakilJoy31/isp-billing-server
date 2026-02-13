@@ -2,6 +2,7 @@ const sequelize = require("../../database/connection");
 const Reminder = require("../../models/reminder/reminder.model");
 const { Op } = require("sequelize");
 const { sendSMSHelper } = require("../../utils/helper/sendSMS");
+const ClientInformation = require("../../models/Authentication/client.model");
 
 //! Create new reminder
 const createReminder = async (req, res, next) => {
@@ -53,9 +54,52 @@ const createReminder = async (req, res, next) => {
       createdBy: req.user?.id || 'admin'
     });
 
-    if(newReminder) {
-      const result = await sendSMSHelper('Reminder', customerPhone);
-      const adminCopySms = await sendSMSHelper("Reminder", '+8801684175551');
+    console.log(newReminder);
+
+    // Send reminder SMS to customer
+    if (newReminder) {
+      const client = await ClientInformation.findOne({
+        where: { id: customerId }
+      });
+
+      if (client) {
+        // Format due date in Bengali
+        const dueDateObj = new Date(dueDate);
+        const formattedDueDate = dueDateObj.toLocaleDateString('bn-BD', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric'
+        });
+        
+        const result = await sendSMSHelper(
+          'Reminder',
+          customerPhone,
+          client.id,
+          null, // Use default message from database
+          {
+            fullName: customerName,
+            dueAmount: amountDue.toString(),
+            packageName: packageName,
+            dueDate: formattedDueDate,
+            customerId: customerId,
+            serviceType: serviceType || 'Internet'
+          }
+        );
+        
+        // Send admin copy
+        await sendSMSHelper(
+          "Reminder",
+          '+8801684175551',
+          client.id,
+          null,
+          {
+            fullName: customerName,
+            dueAmount: amountDue.toString(),
+            packageName: packageName,
+            customerId: customerId
+          }
+        );
+      }
     }
 
     return res.status(201).json({

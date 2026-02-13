@@ -32,7 +32,7 @@ const createPublicContact = async (req, res, next) => {
     }
 
     // Create new contact
-    const newContact = await Contact.create({
+    const newContact = await PublicMessageContact.create({
       name,
       email,
       phone: phone || null,
