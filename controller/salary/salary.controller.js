@@ -121,7 +121,7 @@ const createSalary = async (req, res, next) => {
       
       if (employee) {
         // Send SMS to employee with dynamic data
-        const result = await sendSMSHelper(
+        await sendSMSHelper(
           "Salary receive",
           employee.mobileNo,
           employee.id,
@@ -148,17 +148,26 @@ const createSalary = async (req, res, next) => {
           "Salary receive",
           '+8801684175551',
           employee.id,
-          null,
+          null, // Use default message from database
           {
             fullName: employee.fullName,
             salaryAmount: netSalary.toFixed(2),
+            grossSalary: grossSalary.toFixed(2),
+            basicSalary: basicSalary || 0,
+            houseRent: houseRent || 0,
+            overtimeAmount: overtimePay.toFixed(2),
+            bonusAmount: totalBonuses.toFixed(2),
+            deductions: totalDeductions.toFixed(2),
             salaryMonth: salaryMonth,
-            salaryYear: salaryYear
+            salaryYear: salaryYear,
+            designation: designation,
+            department: department,
+            paymentDate: paymentDate ? new Date(paymentDate).toLocaleDateString('bn-BD') : new Date().toLocaleDateString('bn-BD')
           }
         );
       }
     }
-
+    
     return res.status(201).json({
       message: "Salary record created successfully!",
       salary: newSalary,

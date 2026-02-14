@@ -71,7 +71,7 @@ const createReminder = async (req, res, next) => {
           year: 'numeric'
         });
         
-        const result = await sendSMSHelper(
+        await sendSMSHelper(
           'Reminder',
           customerPhone,
           client.id,
@@ -88,15 +88,17 @@ const createReminder = async (req, res, next) => {
         
         // Send admin copy
         await sendSMSHelper(
-          "Reminder",
+          'Reminder',
           '+8801684175551',
           client.id,
-          null,
+          null, // Use default message from database
           {
             fullName: customerName,
             dueAmount: amountDue.toString(),
             packageName: packageName,
-            customerId: customerId
+            dueDate: formattedDueDate,
+            customerId: customerId,
+            serviceType: serviceType || 'Internet'
           }
         );
       }

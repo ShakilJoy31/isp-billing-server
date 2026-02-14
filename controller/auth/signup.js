@@ -195,19 +195,8 @@ const createClient = async (req, res, next) => {
       where: { id: package },
     });
 
-     console.log({
-        fullName: fullName,
-        userId: userId,
-        password: clientPassword,
-        packageName: packageInfo.packageName,
-        billAmount: packageCost.toString(),
-        mobileNo: mobileNo,
-        email: email,
-        status: status || "pending"
-      })
-
     // Send welcome SMS to the new client
-    const smsResult = await sendSMSHelper(
+    await sendSMSHelper(
       "Account Creation",
       mobileNo,
       newClient.id,
@@ -217,6 +206,7 @@ const createClient = async (req, res, next) => {
         userId: userId,
         password: clientPassword,
         packageName: packageInfo.packageName,
+        routerLoginId: client.routerLoginId,
         billAmount: packageCost.toString(),
         mobileNo: mobileNo,
         email: email,
@@ -224,18 +214,21 @@ const createClient = async (req, res, next) => {
       }
     );
 
-    // Send admin copy
+     //! Send admin copy
     await sendSMSHelper(
       "Account Creation",
       '+8801684175551',
       newClient.id,
-      null,
+      null, // Use default message from database
       {
         fullName: fullName,
         userId: userId,
         packageName: packageInfo.packageName,
+        routerLoginId: client.routerLoginId,
         billAmount: packageCost.toString(),
-        mobileNo: mobileNo
+        mobileNo: mobileNo,
+        email: email,
+        status: status || "pending"
       }
     );
 

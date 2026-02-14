@@ -11,7 +11,6 @@ const sendSMSHelper = async (
   customMessage = null,
   customVariables = {},
 ) => {
-  console.log("Sending SMS for service:", service, "to:", phoneNumber, userId);
 
   try {
     // Find the SMS configuration by service type

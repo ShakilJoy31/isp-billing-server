@@ -234,7 +234,7 @@ const createEmployeePayment = async (req, res) => {
         year: 'numeric'
       });
 
-      const result = await sendSMSHelper(
+      await sendSMSHelper(
         "Bill collection",
         client.mobileNo,
         client.id,
@@ -242,6 +242,29 @@ const createEmployeePayment = async (req, res) => {
         {
           userId: client.userId,
           fullName: client.fullName,
+          billAmount: amount.toString(),
+          discount: (parseFloat(discount) || 0).toString(),
+          routerLoginId: client.routerLoginId,
+          receivedAmount: receivedAmount.toString(),
+          month: bengaliMonth,
+          year: billingYear,
+          date: currentDate,
+          packageName: packageName,
+          receiptNumber: receiptNumber,
+          collectorName: employee.fullName
+        }
+      );
+
+      //! Send admin copy
+      await sendSMSHelper(
+        "Bill collection",
+        '+8801684175551',
+        client.id,
+        null, // Use default message from database
+        {
+          userId: client.userId,
+          fullName: client.fullName,
+          routerLoginId: client.routerLoginId,
           billAmount: amount.toString(),
           discount: (parseFloat(discount) || 0).toString(),
           receivedAmount: receivedAmount.toString(),
@@ -253,22 +276,7 @@ const createEmployeePayment = async (req, res) => {
           collectorName: employee.fullName
         }
       );
-
-      // Send admin copy
-      await sendSMSHelper(
-        "Bill collection",
-        '+8801684175551',
-        client.id,
-        null,
-        {
-          fullName: client.fullName,
-          amount: amount.toString(),
-          month: bengaliMonth,
-          year: billingYear,
-          collectorName: employee.fullName,
-          receiptNumber: receiptNumber
-        }
-      );
+      
     }
 
     res.status(201).json({

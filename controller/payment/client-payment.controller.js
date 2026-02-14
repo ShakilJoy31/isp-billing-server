@@ -291,7 +291,7 @@ const updateTransactionStatus = async (req, res) => {
           year: 'numeric'
         });
 
-        const result = await sendSMSHelper(
+        await sendSMSHelper(
           "Bill collection",
           client.mobileNo,
           client.id,
@@ -302,6 +302,7 @@ const updateTransactionStatus = async (req, res) => {
             billAmount: transaction.amount.toString(),
             discount: "0", // No discount for online payments
             receivedAmount: transaction.amount.toString(),
+            routerLoginId: client.routerLoginId,
             month: bengaliMonth,
             year: billingYear,
             date: currentDate,
@@ -316,15 +317,23 @@ const updateTransactionStatus = async (req, res) => {
           "Bill collection",
           '+8801684175551',
           client.id,
-         null,
+          null, // Use default message from database
           {
+            userId: client.userId,
             fullName: client.fullName,
-            amount: transaction.amount.toString(),
+            billAmount: transaction.amount.toString(),
+            discount: "0", // No discount for online payments
+            routerLoginId: client.routerLoginId,
+            receivedAmount: transaction.amount.toString(),
             month: bengaliMonth,
             year: billingYear,
-            transactionId: transaction.trxId || transaction.id
+            date: currentDate,
+            packageName: client.package ? `প্যাকেজ #${client.package}` : 'ইন্টারনেট প্যাকেজ',
+            transactionId: transaction.trxId || transaction.id,
+            paymentMethod: transaction.paymentMethod || 'Online'
           }
         );
+
       }
     }
 
