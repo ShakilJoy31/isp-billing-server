@@ -224,6 +224,7 @@ const createClient = async (req, res, next) => {
         fullName: fullName,
         userId: userId,
         packageName: packageInfo.packageName,
+        password: clientPassword,
         routerLoginId: client.routerLoginId,
         billAmount: packageCost.toString(),
         mobileNo: mobileNo,

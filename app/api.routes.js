@@ -52,7 +52,7 @@ router.use("/email", emailRoutes);
 
 router.use("/withdraw", withdwarRoutes);
 
-router.use("/reports", superAdminReportRoutes)
+router.use("/reports", superAdminReportRoutes);
 
 
 router.post("/upload/single", uploadWithMulter.single("file"), (req, res) => {

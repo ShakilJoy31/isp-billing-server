@@ -5,9 +5,9 @@ const FTPServer = require("../../models/FTPServer/FTPServer.model");
 const formatServerLink = (url) => {
   if (!url) return url;
   
-  // Remove any existing protocol and ensure https:// prefix
-  const cleanedUrl = url.replace(/^https?:\/\//, '').trim();
-  return `https://${cleanedUrl}`;
+  // Remove any existing protocol and ensure http:// prefix
+  const cleanedUrl = url.replace(/^http?:\/\//, '').trim();
+  return `http://${cleanedUrl}`;
 };
 
 // Create new FTP Server

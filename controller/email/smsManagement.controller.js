@@ -36,10 +36,10 @@ const createSMS = async (req, res, next) => {
     }
 
     // Validate service
-    const validServices = ["Bill collection", "Reminder", "Account Creation", "Salary receive"];
+    const validServices = ["Bill collection", "Reminder", "Account Creation", "Salary receive", "Client Disable", "Client Enable", "Bill Due", "Bill Due Notice", "Bill Due Final Notice"];
     if (!validServices.includes(service)) {
       return res.status(400).json({
-        message: "Service must be one of: Bill collection, Reminder, Account Creation, Salary receive.",
+        message: "Service must be one of: Bill collection, Reminder, Account Creation, Salary receive, Client Disable, Client Enable, Bill Due, Bill Due Notice, Bill Due Final Notice",
       });
     }
 
@@ -195,10 +195,10 @@ const updateSMS = async (req, res, next) => {
 
     // Validate service if provided
     if (service) {
-      const validServices = ["Bill collection", "Reminder", "Account Creation", "Salary receive"];
+      const validServices = ["Bill collection", "Reminder", "Account Creation", "Salary receive", "Client Disable", "Client Enable", "Bill Due", "Bill Due Notice", "Bill Due Final Notice"];
       if (!validServices.includes(service)) {
         return res.status(400).json({
-          message: "Service must be one of: Bill collection, Reminder, Account Creation, Salary receive.",
+           message: "Service must be one of: Bill collection, Reminder, Account Creation, Salary receive, Client Disable, Client Enable, Bill Due, Bill Due Notice, Bill Due Final Notice",
         });
       }
     }

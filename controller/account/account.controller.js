@@ -40,15 +40,18 @@ const createBankAccount = async (req, res, next) => {
       });
     }
 
-    // Check if account number already exists
+    // Check if combination of bankName and accountNumber already exists
     const existingAccount = await BankAccount.findOne({
-      where: { accountNumber },
+      where: {
+        bankName: bankName,
+        accountNumber: accountNumber
+      }
     });
 
     if (existingAccount) {
-      return res.status(400).json({
+      return res.status(409).json({
         success: false,
-        message: "Account number already exists",
+        message: `An account with bank name "${bankName}" and account number "${accountNumber}" already exists!`,
       });
     }
 
@@ -78,14 +81,55 @@ const createBankAccount = async (req, res, next) => {
 
     return res.status(201).json({
       success: true,
-      message: "Account Created Done",
+      message: "Account Created Successfully!",
       data: newAccount,
     });
   } catch (error) {
     console.error("Error creating bank account:", error);
+    
+    // Handle unique constraint error
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      return res.status(409).json({
+        success: false,
+        message: `An account with bank name "${req.body.bankName}" and account number "${req.body.accountNumber}" already exists!`,
+      });
+    }
+    
     next(error);
   }
 };
+
+
+const checkCombination = async (req, res) => {
+  try {
+    const { bankName, accountNumber } = req.query;
+    
+    if (!bankName || !accountNumber) {
+      return res.status(400).json({
+        success: false,
+        message: 'Bank name and account number are required'
+      });
+    }
+    
+    const existingAccount = await BankAccount.findOne({
+      where: {
+        bankName: bankName,
+        accountNumber: accountNumber
+      }
+    });
+    
+    return res.status(200).json({
+      success: true,
+      exists: !!existingAccount
+    });
+  } catch (error) {
+    console.error('Error checking combination:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error checking account combination'
+    });
+  }
+}
 
 //! Get all bank accounts with filtering and pagination
 const getAllBankAccounts = async (req, res, next) => {
@@ -676,6 +720,7 @@ const getAccountsByType = async (req, res, next) => {
 
 module.exports = {
   createBankAccount,
+  checkCombination,
   getAllBankAccounts,
   getBankAccountById,
   updateBankAccount,

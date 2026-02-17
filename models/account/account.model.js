@@ -13,6 +13,7 @@ const BankAccount = sequelize.define(
     bankName: {
       type: dt.STRING,
       allowNull: false,
+      // Removed unique: true from here
     },
     accountHolderName: {
       type: dt.STRING,
@@ -25,7 +26,6 @@ const BankAccount = sequelize.define(
     accountNumber: {
       type: dt.STRING,
       allowNull: false,
-      unique: true,
     },
     accountType: {
       type: dt.ENUM(
@@ -143,9 +143,17 @@ const BankAccount = sequelize.define(
       },
     },
     indexes: [
+      // Make the combination of bankName and accountNumber unique
+      {
+        unique: true,
+        fields: ["bankName", "accountNumber"],
+        name: "unique_bank_account_combination"
+      },
+      {
+        fields: ["bankName"],
+      },
       {
         fields: ["accountNumber"],
-        unique: true,
       },
       {
         fields: ["bankName", "branchId"],

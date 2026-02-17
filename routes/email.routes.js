@@ -6,6 +6,7 @@ const {
   sendReminderEmail,
   sendBillCollectionEmail,
   sendTransactionStatusEmail,
+  sendClientCustomSms,
 } = require("../controller/email/email.controller");
 const { createEmail, getAllEmails, getEmailById, updateEmail, toggleEmailStatus, deleteEmail, getActiveEmails, getEmailStats } = require("../controller/email/emailManagement.controller");
 const { createSMS, getAllSMS, getSMSById, updateSMS, deleteSMS, testSMS } = require("../controller/email/smsManagement.controller");
@@ -25,6 +26,9 @@ router.post("/send-bill-collection-email", sendBillCollectionEmail);
 
 //! Approve email by Super-Admin
 router.post('/send-transaction-status-email', sendTransactionStatusEmail);
+
+
+router.post("/send-client-custom-sms", sendClientCustomSms)
 
 
 

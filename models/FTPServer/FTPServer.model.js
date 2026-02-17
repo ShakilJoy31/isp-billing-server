@@ -46,15 +46,15 @@ const FTPServer = sequelize.define("FTPServer", {
   timestamps: true,
   hooks: {
     beforeCreate: (ftpserver) => {
-      // Ensure serverLink starts with https://
-      if (ftpserver.serverLink && !ftpserver.serverLink.startsWith('https://')) {
-        ftpserver.serverLink = `https://${ftpserver.serverLink.replace(/^https?:\/\//, '')}`;
+      // Ensure serverLink starts with http://
+      if (ftpserver.serverLink && !ftpserver.serverLink.startsWith('http://')) {
+        ftpserver.serverLink = `http://${ftpserver.serverLink.replace(/^http?:\/\//, '')}`;
       }
     },
     beforeUpdate: (ftpserver) => {
-      // Ensure serverLink starts with https:// when updating
-      if (ftpserver.serverLink && !ftpserver.serverLink.startsWith('https://')) {
-        ftpserver.serverLink = `https://${ftpserver.serverLink.replace(/^https?:\/\//, '')}`;
+      // Ensure serverLink starts with http:// when updating
+      if (ftpserver.serverLink && !ftpserver.serverLink.startsWith('http://')) {
+        ftpserver.serverLink = `http://${ftpserver.serverLink.replace(/^http?:\/\//, '')}`;
       }
     }
   }

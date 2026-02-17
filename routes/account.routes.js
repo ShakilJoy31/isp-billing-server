@@ -1,5 +1,5 @@
 const express = require("express");
-const { createBankAccount, getAllBankAccounts, getBankAccountById, updateBankAccount, deleteBankAccount, getBankAccountStats, getAccountsByBranch, getAccountsByType, updateAccountBalance, deleteBankAccountEntry } = require("../controller/account/account.controller");
+const { createBankAccount, getAllBankAccounts, getBankAccountById, updateBankAccount, deleteBankAccount, getBankAccountStats, getAccountsByBranch, getAccountsByType, updateAccountBalance, deleteBankAccountEntry, checkCombination } = require("../controller/account/account.controller");
 const { getAllPaymentMethods, getPaymentMethodById, upsertPaymentMethod, updatePaymentMethodStatus, deletePaymentMethod } = require("../controller/account/paymentMethod.controller");
 
 const router = express.Router();
@@ -7,6 +7,7 @@ const router = express.Router();
 //! Bank Account routes
 router.post("/create-account", createBankAccount);
 router.get("/get-all-accounts", getAllBankAccounts);
+router.get("/check-combination",checkCombination)
 router.get("/get-account/:id", getBankAccountById);
 router.put("/update-account/:id", updateBankAccount);
 router.delete("/delete-account/:id", deleteBankAccount);

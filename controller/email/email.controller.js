@@ -2,6 +2,7 @@ const AuthorityInformation = require("../../models/Authentication/authority.mode
 const ClientInformation = require("../../models/Authentication/client.model");
 const Package = require("../../models/package/package.model");
 const Salary = require("../../models/salary/salary.model");
+const { sendSMSHelper } = require("../../utils/helper/sendSMS");
 const { sendEmail } = require("./clientEmail.service");
 
 //! Helper function to create welcome email template
@@ -2087,6 +2088,145 @@ const sendTransactionStatusEmail = async (req, res, next) => {
 };
 
 
+//! Send client custom sms
+const sendClientCustomSms = async (req, res, next) => {
+  try {
+    const { 
+      clientId,  
+      clientPhone, 
+      service, 
+      message,
+      customVariables = {} 
+    } = req.body;
+
+    // Validate required fields
+    if (!clientPhone) {
+      return res.status(400).json({
+        success: false,
+        message: "Client phone number is required"
+      });
+    }
+
+    if (!service) {
+      return res.status(400).json({
+        success: false,
+        message: "Service type is required"
+      });
+    }
+
+    if (!message) {
+      return res.status(400).json({
+        success: false,
+        message: "Message content is required"
+      });
+    }
+
+    // Fetch the client from database to get all their information
+    const client = await ClientInformation.findByPk(clientId);
+    
+    if (!client) {
+      return res.status(404).json({
+        success: false,
+        message: "Client not found"
+      });
+    }
+
+    // Get package information if client has a package
+    let packageInfo = {};
+    if (client.package) {
+      const thePackage = await Package.findOne({
+        where: { packageName: client.package }
+      });
+      if (thePackage) {
+        packageInfo = thePackage.toJSON();
+      }
+    }
+
+    // Prepare all client variables from the database
+    const clientVariables = {
+      // Basic client information
+      fullName: client.fullName || "",
+      email: client.email || "",
+      mobileNo: client.mobileNo || "",
+      package: client.package || "",
+      packageName: client.package || "",
+      location: client.location || "",
+      area: client.area || "",
+      userId: client.userId || "",
+      routerLoginId: client.routerLoginId || "",
+      routerLoginPassword: client.routerLoginPassword || "",
+      costForPackage: client.costForPackage?.toString() || "0",
+      billAmount: client.costForPackage?.toString() || "0",
+      monthlyAmount: client.costForPackage?.toString() || "0",
+      customerType: client.customerType || "",
+      status: client.status || "",
+      customerId: client.customerId || "",
+      flatAptNo: client.flatAptNo || "",
+      houseNo: client.houseNo || "",
+      roadNo: client.roadNo || "",
+      landmark: client.landmark || "",
+      referId: client.referId || "",
+      fatherOrSpouseName: client.fatherOrSpouseName || "",
+      dateOfBirth: client.dateOfBirth ? new Date(client.dateOfBirth).toLocaleDateString() : "",
+      age: client.age?.toString() || "",
+      sex: client.sex || "",
+      maritalStatus: client.maritalStatus || "",
+      nidOrPassportNo: client.nidOrPassportNo || "",
+      jobPlaceName: client.jobPlaceName || "",
+      jobCategory: client.jobCategory || "",
+      jobType: client.jobType || "",
+      connectionDetails: client.connectionDetails || "",
+      userAddedBy: client.userAddedBy || "",
+    };
+
+    // Merge with custom variables from frontend (frontend variables will override if same key)
+    const allVariables = {
+      ...clientVariables,
+      ...customVariables
+    };
+
+    // Send SMS using the helper function
+    const result = await sendSMSHelper(
+      service,           // Service type (e.g., "Account Creation", "Bill collection", etc.)
+      clientPhone,       // Phone number
+      clientId,          // Client ID
+      message,           // Custom message (already has placeholders replaced on frontend)
+      allVariables       // Pass all variables from database
+    );
+
+    if (result.success) {
+      await sendSMSHelper(
+      service,           // Service type (e.g., "Account Creation", "Bill collection", etc.)
+      '+8801684175551',       // Super admin number
+      clientId,          // Client ID
+      message,           // Custom message (already has placeholders replaced on frontend)
+      allVariables       // Pass all variables from database
+    );
+      return res.status(200).json({
+        success: true,
+        message: "SMS sent successfully",
+        data: result.details
+      });
+    } else {
+      return res.status(500).json({
+        success: false,
+        message: result.message || "Failed to send SMS",
+        error: result.details
+      });
+    }
+
+  } catch (error) {
+    console.error("Error in sendClientCustomSms:", error);
+    
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error while sending SMS",
+      error: error.message
+    });
+  }
+};
+
+
 
 // Update module.exports to include both functions
 module.exports = {
@@ -2094,5 +2234,6 @@ module.exports = {
   sendSalaryReceivedEmail,
   sendReminderEmail,
   sendBillCollectionEmail,
-  sendTransactionStatusEmail
+  sendTransactionStatusEmail,
+  sendClientCustomSms
 };
