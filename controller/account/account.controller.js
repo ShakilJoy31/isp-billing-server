@@ -40,21 +40,6 @@ const createBankAccount = async (req, res, next) => {
       });
     }
 
-    // Check if combination of bankName and accountNumber already exists
-    const existingAccount = await BankAccount.findOne({
-      where: {
-        bankName: bankName,
-        accountNumber: accountNumber
-      }
-    });
-
-    if (existingAccount) {
-      return res.status(409).json({
-        success: false,
-        message: `An account with bank name "${bankName}" and account number "${accountNumber}" already exists!`,
-      });
-    }
-
     // Create new bank account
     const newAccount = await BankAccount.create({
       bankName,
