@@ -1870,4 +1870,5 @@ module.exports = {
 
   //! Now client according to the package will be available from all file.
   getPackageDetails,
+  getPackageDetails
 };

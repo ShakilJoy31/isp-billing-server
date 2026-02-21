@@ -1,17 +1,19 @@
 const { Op } = require("sequelize");
 const sequelize = require("../../database/connection");
-const AuthorityInformation = require("../../models/Authentication/authority.model");
-const Package = require("../../models/package/package.model");
 const ClientInformation = require("../../models/Authentication/client.model");
-const { getPackageDetails } = require("../auth/signup");
+const Package = require("../../models/package/package.model");
+const AuthorityInformation = require("../../models/Authentication/authority.model");
+const EmployeePayment = require("../../models/payment/employee-payment.model");
+const Transaction = require("../../models/payment/client-payment.model");
 
-// Helper function to parse date filters
+//! Helper function to parse date filters (updated - now used for backward compatibility)
 const parseDateFilters = (startDate, endDate, field = "createdAt") => {
   const filter = {};
   if (startDate || endDate) {
     filter[field] = {};
     if (startDate) {
       const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
       filter[field][Op.gte] = start;
     }
     if (endDate) {
@@ -23,1673 +25,819 @@ const parseDateFilters = (startDate, endDate, field = "createdAt") => {
   return filter;
 };
 
-//! 2. CLIENT STATUS REPORT - UPDATED
-const getClientStatusReport = async (req, res, next) => {
+//! Helper function to format date
+const formatDate = (date) => {
+  if (!date) return "";
+  const d = new Date(date);
+  return d.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).replace(/\//g, "/");
+};
+
+//! Helper function to get package details
+const getPackageDetails = async (packageId) => {
+  if (!packageId) return null;
   try {
-    const {
-      startDate,
-      endDate,
-      location,
-      area,
-      customerType,
-      packageId,
-      dateType = "createdAt",
-    } = req.query;
-
-    const whereClause = { role: "client" };
-
-    // Date filter
-    if (startDate || endDate) {
-      const dateFilter = parseDateFilters(startDate, endDate, dateType);
-      Object.assign(whereClause, dateFilter);
-    }
-
-    if (location) whereClause.location = location;
-    if (area) whereClause.area = area;
-    if (customerType) whereClause.customerType = customerType;
-    if (packageId) whereClause.package = packageId;
-
-    // Detailed status breakdown with client information
-    const statusBreakdown = await ClientInformation.findAll({
-      where: whereClause,
-      attributes: [
-        "status",
-        [sequelize.fn("COUNT", sequelize.col("id")), "count"],
-        [sequelize.fn("SUM", sequelize.col("costForPackage")), "totalRevenue"],
-        [sequelize.fn("AVG", sequelize.col("costForPackage")), "avgRevenue"],
-        [
-          sequelize.literal(`COUNT(CASE WHEN isFreeClient = true THEN 1 END)`),
-          "freeClients",
-        ],
-      ],
-      group: ["status"],
-      order: [[sequelize.literal("count"), "DESC"]],
-    });
-
-    // Convert status breakdown to simple objects (no sampleClients)
-    const statusBreakdownSimple = statusBreakdown.map((statusGroup) => {
-      const statusData = statusGroup.toJSON();
-      // Return only the basic status data, no sampleClients
-      return {
-        status: statusData.status,
-        count: statusData.count,
-        totalRevenue: statusData.totalRevenue,
-        avgRevenue: statusData.avgRevenue,
-        freeClients: statusData.freeClients,
-      };
-    });
-
-    // Status change timeline (last 90 days)
-    const ninetyDaysAgo = new Date();
-    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-
-    // First, get the status change dates
-    const statusChangeDates = await ClientInformation.findAll({
-      where: {
-        role: "client",
-        updatedAt: { [Op.gte]: ninetyDaysAgo },
-      },
-      attributes: [
-        [sequelize.fn("DATE", sequelize.col("updatedAt")), "date"],
-        "status",
-        [sequelize.fn("COUNT", sequelize.col("id")), "count"],
-      ],
-      group: [sequelize.fn("DATE", sequelize.col("updatedAt")), "status"],
-      order: [[sequelize.fn("DATE", sequelize.col("updatedAt")), "DESC"]],
-      limit: 30,
-    });
-
-    // Get detailed client information for each status change date
-    const statusChangesWithDetails = await Promise.all(
-      statusChangeDates.map(async (change) => {
-        const changeData = change.toJSON();
-
-        // Get clients who had status changes on this date
-        const dateStart = new Date(changeData.date);
-        const dateEnd = new Date(changeData.date);
-        dateEnd.setHours(23, 59, 59, 999);
-
-        const changedClients = await ClientInformation.findAll({
-          where: {
-            role: "client",
-            status: changeData.status,
-            updatedAt: {
-              [Op.gte]: dateStart,
-              [Op.lte]: dateEnd,
-            },
-          },
-          attributes: [
-            "id",
-            "userId",
-            "fullName",
-            "mobileNo",
-            "email",
-            "photo",
-            "status",
-            "location",
-            "area",
-            "customerType",
-            "package",
-            "createdAt",
-            "updatedAt",
-          ],
-          limit: 20, // Limit to prevent too much data
-          order: [["updatedAt", "DESC"]],
-        });
-
-        // Transform clients to include package details
-        const transformedClients = await Promise.all(
-          changedClients.map(async (client) => {
-            const clientData = client.toJSON();
-
-            // Get package details if package exists
-            if (clientData.package) {
-              const packageDetails = await getPackageDetails(
-                clientData.package,
-              );
-              if (packageDetails) {
-                clientData.packageDetails = packageDetails;
-                clientData.packageName = packageDetails.packageName;
-              }
-            }
-
-            return {
-              id: clientData.id,
-              userId: clientData.userId,
-              fullName: clientData.fullName,
-              mobileNo: clientData.mobileNo,
-              email: clientData.email,
-              photo: clientData.photo,
-              status: clientData.status,
-              location: clientData.location,
-              area: clientData.area,
-              customerType: clientData.customerType,
-              packageName: clientData.packageName,
-              createdAt: clientData.createdAt,
-              updatedAt: clientData.updatedAt,
-            };
-          }),
-        );
-
-        return {
-          date: changeData.date,
-          status: changeData.status,
-          count: changeData.count,
-          clients: transformedClients,
-        };
-      }),
-    );
-
-    // Monthly status trend for the last 12 months
-    const monthlyStatus = await ClientInformation.findAll({
-      where: whereClause,
-      attributes: [
-        [
-          sequelize.fn("DATE_FORMAT", sequelize.col("createdAt"), "%Y-%m"),
-          "month",
-        ],
-        "status",
-        [sequelize.fn("COUNT", sequelize.col("id")), "count"],
-        [sequelize.fn("SUM", sequelize.col("costForPackage")), "revenue"],
-      ],
-      group: [
-        sequelize.fn("DATE_FORMAT", sequelize.col("createdAt"), "%Y-%m"),
-        "status",
-      ],
-      order: [
-        [
-          sequelize.fn("DATE_FORMAT", sequelize.col("createdAt"), "%Y-%m"),
-          "DESC",
-        ],
-        ["status", "ASC"],
-      ],
-      limit: 36,
-    });
-
-    // Location-wise status distribution
-    const locationStatus = await ClientInformation.findAll({
-      where: whereClause,
-      attributes: [
-        "location",
-        "status",
-        [sequelize.fn("COUNT", sequelize.col("id")), "count"],
-        [sequelize.fn("AVG", sequelize.col("costForPackage")), "avgRevenue"],
-      ],
-      group: ["location", "status"],
-      order: [
-        ["location", "ASC"],
-        [sequelize.literal("count"), "DESC"],
-      ],
-    });
-
-    // Package-wise status distribution
-    // First get all packages referenced by clients in the filtered results
-    const packageStatusRaw = await ClientInformation.findAll({
-      where: whereClause,
-      attributes: [
-        "package",
-        "status",
-        [sequelize.fn("COUNT", sequelize.col("id")), "count"],
-      ],
-      group: ["package", "status"],
-      order: [[sequelize.literal("count"), "DESC"]],
-    });
-
-    // Then get package details for each package
-    const packageStatus = await Promise.all(
-      packageStatusRaw.map(async (pkgStatus) => {
-        const pkgData = pkgStatus.toJSON();
-
-        // Get package details
-        let packageDetails = null;
-        if (pkgData.package) {
-          packageDetails = await getPackageDetails(pkgData.package);
-        }
-
-        return {
-          packageId: pkgData.package,
-          packageName: packageDetails
-            ? packageDetails.packageName
-            : "Unknown/No Package",
-          packagePrice: packageDetails ? packageDetails.packagePrice : 0,
-          status: pkgData.status,
-          count: pkgData.count,
-        };
-      }),
-    );
-
-    // Status transition matrix (if you have a status_change_log table)
-    // Note: This will only work if you have a status_change_log table
-    let statusTransitions = [];
-    try {
-      // Check if the table exists first
-      const tableExists = await sequelize.query(
-        `SELECT EXISTS (
-          SELECT FROM information_schema.tables 
-          WHERE table_name = 'status_change_log'
-        )`,
-        { type: sequelize.QueryTypes.SELECT },
-      );
-
-      if (tableExists && tableExists[0] && tableExists[0].exists) {
-        statusTransitions = await sequelize.query(
-          `
-          SELECT 
-            old_status,
-            new_status,
-            COUNT(*) as transition_count,
-            GROUP_CONCAT(DISTINCT user_id) as affected_users
-          FROM status_change_log
-          WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-          GROUP BY old_status, new_status
-          ORDER BY transition_count DESC
-        `,
-          { type: sequelize.QueryTypes.SELECT },
-        );
-      }
-    } catch (error) {
-      console.warn(
-        "Status change log table not found or error querying it:",
-        error.message,
-      );
-      // Continue without status transitions
-    }
-
-    // Calculate summary statistics
-    const summaryData = {
-      totalStatuses: statusBreakdown.length,
-      totalClients: statusBreakdown.reduce(
-        (sum, item) => sum + parseInt(item.dataValues.count || 0),
-        0,
-      ),
-      totalRevenue: statusBreakdown.reduce(
-        (sum, item) => sum + parseFloat(item.dataValues.totalRevenue || 0),
-        0,
-      ),
-      averageRevenuePerClient: 0,
-      activeClients: 0,
-      pendingClients: 0,
-      inactiveClients: 0,
-    };
-
-    // Calculate detailed statistics
-    statusBreakdown.forEach((item) => {
-      const status = item.dataValues.status;
-      const count = parseInt(item.dataValues.count || 0);
-
-      if (status === "active") {
-        summaryData.activeClients = count;
-      } else if (status === "pending") {
-        summaryData.pendingClients = count;
-      } else if (status === "inactive") {
-        summaryData.inactiveClients = count;
-      }
-    });
-
-    // Calculate average revenue per client
-    if (summaryData.totalClients > 0) {
-      summaryData.averageRevenuePerClient =
-        summaryData.totalRevenue / summaryData.totalClients;
-    }
-
-    res.status(200).json({
-      success: true,
-      data: {
-        statusBreakdown: statusBreakdownSimple, // Use the simple version without sampleClients
-        statusChanges: statusChangesWithDetails, // Now with detailed client objects
-        monthlyStatus: monthlyStatus.map((item) => item.toJSON()),
-        locationStatus: locationStatus.map((item) => item.toJSON()),
-        packageStatus,
-        statusTransitions,
-      },
-      summary: {
-        ...summaryData,
-        averageRevenuePerClient: summaryData.averageRevenuePerClient.toFixed(2),
-        conversionRate:
-          summaryData.totalClients > 0
-            ? (
-                (summaryData.activeClients / summaryData.totalClients) *
-                100
-              ).toFixed(2) + "%"
-            : "0%",
-      },
-      filters: {
-        startDate,
-        endDate,
-        location,
-        area,
-        customerType,
-        packageId,
-        dateType,
-      },
-    });
+    const packageData = await Package.findByPk(packageId);
+    return packageData ? packageData.toJSON() : null;
   } catch (error) {
-    console.error("Error in client status report:", error);
-    next(error);
+    console.error("Error fetching package details:", error);
+    return null;
   }
 };
 
-//! 3. CLIENT PACKAGE DISTRIBUTION REPORT - UPDATED
-const getClientPackageDistributionReport = async (req, res, next) => {
+//! Helper function to get last payment date
+const getLastPaymentDate = async (clientId) => {
+  try {
+    // Check if client is free and get both id and userId
+    const client = await ClientInformation.findOne({
+      where: { userId: clientId },
+      attributes: ["isFreeClient", "id", "userId"],
+    });
+    
+    // If client is free, return "Free Client" instead of payment date
+    if (client && client.isFreeClient) {
+      return "Free Client";
+    }
+
+    if (!client) return "No Payment";
+
+    // Get the latest transaction (client self-payment) - using numeric id as string
+    const transaction = await Transaction.findOne({
+      where: { userId: client.id.toString(), status: "approved" },
+      order: [["createdAt", "DESC"]],
+      attributes: ["createdAt"],
+    });
+
+    // Get the latest employee payment - using the string userId (not numeric id)
+    const employeePayment = await EmployeePayment.findOne({
+      where: { 
+        clientId: client.userId, // Use the string userId here, not numeric id
+        status: { [Op.in]: ["collected", "verified", "deposited"] } 
+      },
+      order: [["collectionDate", "DESC"]],
+      attributes: ["collectionDate"],
+    });
+
+    let lastDate = null;
+    if (transaction && employeePayment) {
+      const transactionDate = new Date(transaction.createdAt);
+      const employeeDate = new Date(employeePayment.collectionDate);
+      lastDate = transactionDate > employeeDate ? transaction.createdAt : employeePayment.collectionDate;
+    } else if (transaction) {
+      lastDate = transaction.createdAt;
+    } else if (employeePayment) {
+      lastDate = employeePayment.collectionDate;
+    }
+
+    return lastDate ? formatDate(lastDate) : "No Payment";
+  } catch (error) {
+    console.error("Error getting last payment date:", error);
+    return "Unknown";
+  }
+};
+
+//! Helper function to calculate total payment (for lifetime revenue)
+const calculateTotalPayment = async (clientId) => {
+  try {
+    // Get client to get both id and userId
+    const client = await ClientInformation.findOne({
+      where: { userId: clientId },
+      attributes: ["id", "userId"],
+    });
+
+    if (!client) return 0;
+
+    // Get transactions (client self-payments) - using numeric id as string
+    const transactions = await Transaction.findAll({
+      where: { 
+        userId: client.id.toString(), 
+        status: "approved" 
+      },
+      attributes: ["amount"],
+    });
+
+    // Get employee payments - using string userId
+    const employeePayments = await EmployeePayment.findAll({
+      where: { 
+        clientId: client.userId, // Use string userId here
+        status: { [Op.in]: ["collected", "verified", "deposited"] }
+      },
+      attributes: ["amount"],
+    });
+
+    let total = 0;
+    transactions.forEach(t => total += parseFloat(t.amount) || 0);
+    employeePayments.forEach(p => total += parseFloat(p.amount) || 0);
+
+    return total;
+  } catch (error) {
+    console.error("Error calculating total payment:", error);
+    return 0;
+  }
+};
+
+//! Helper function to calculate due amount for a client
+const calculateClientDue = async (clientId, upToDate = new Date()) => {
+  try {
+    // Get client details - include createdAt, isFreeClient, id, and userId
+    const client = await ClientInformation.findOne({
+      where: { userId: clientId },
+      attributes: ["costForPackage", "package", "status", "userId", "fullName", "createdAt", "isFreeClient", "id"],
+    });
+
+    if (!client) return 0;
+    
+    // If client is free, due amount is always 0
+    if (client.isFreeClient) return 0;
+
+    const monthlyBill = parseFloat(client.costForPackage) || 0;
+    if (monthlyBill === 0) return 0;
+
+    // Get all paid transactions for this client (client self-payments) - using numeric id as string
+    const transactions = await Transaction.findAll({
+      where: {
+        userId: client.id.toString(),
+        status: "approved",
+      },
+      attributes: ["amount", "billingMonth", "billingYear", "createdAt"],
+    });
+
+    // Get all employee payments - using string userId
+    const employeePayments = await EmployeePayment.findAll({
+      where: {
+        clientId: client.userId, // Use string userId here
+        status: { [Op.in]: ["collected", "verified", "deposited"] },
+      },
+      attributes: ["amount", "billingMonth", "collectionDate"],
+    });
+
+    // Calculate total paid amount from both sources
+    let totalPaid = 0;
+    transactions.forEach(t => totalPaid += parseFloat(t.amount) || 0);
+    employeePayments.forEach(p => totalPaid += parseFloat(p.amount) || 0);
+
+    // Get join date
+    const joinDate = new Date(client.createdAt);
+    const currentDate = new Date(upToDate);
+    
+    // Calculate months since join
+    const yearsDiff = currentDate.getFullYear() - joinDate.getFullYear();
+    const monthsDiff = currentDate.getMonth() - joinDate.getMonth();
+    const daysDiff = currentDate.getDate() - joinDate.getDate();
+    
+    let monthsSinceJoin = yearsDiff * 12 + monthsDiff;
+    
+    // If we're past the join day of the current month, add another month
+    if (daysDiff >= 0) {
+      monthsSinceJoin += 1;
+    }
+    
+    // Ensure at least 1 month for new clients
+    monthsSinceJoin = Math.max(1, monthsSinceJoin);
+    
+    const expectedAmount = monthsSinceJoin * monthlyBill;
+    const dueAmount = Math.max(0, expectedAmount - totalPaid);
+
+    // Return as number, not NaN
+    return isNaN(dueAmount) ? 0 : dueAmount;
+  } catch (error) {
+    console.error("Error calculating client due:", error);
+    return 0;
+  }
+};
+
+
+//! 1. ACTIVE CLIENTS REPORT
+const getActiveClientsReport = async (req, res, next) => {
   try {
     const {
       startDate,
       endDate,
-      status,
       location,
       area,
-      packageType,
-      duration,
-      dateType = "createdAt",
+      packageId,
+      zone,
+      dateType = "lastPayment", // Changed default to "lastPayment"
       page = 1,
-      limit = 20,
+      limit = 100,
     } = req.query;
 
     const pageNumber = parseInt(page, 10);
     const limitNumber = parseInt(limit, 10);
     const offset = (pageNumber - 1) * limitNumber;
 
-    const whereClause = { role: "client" };
-    if (status) whereClause.status = status;
-    if (location) whereClause.location = location;
-    if (area) whereClause.area = area;
-
-    // Date filter
-    if (startDate || endDate) {
-      const dateFilter = parseDateFilters(startDate, endDate, dateType);
-      Object.assign(whereClause, dateFilter);
-    }
-
-    // Get all packages with filters
-    const packageWhereClause = {};
-    if (packageType) packageWhereClause.packageType = packageType;
-    if (duration) packageWhereClause.duration = duration;
-
-    const packages = await Package.findAll({
-      where: packageWhereClause,
-      attributes: [
-        "id",
-        "packageName",
-        "packageBandwidth",
-        "packagePrice",
-        "duration",
-        "packageType",
-        "downloadSpeed",
-        "uploadSpeed",
-        "dataLimit",
-        "installationFee",
-        "discount",
-        "status",
-      ],
-      order: [["packagePrice", "ASC"]],
-    });
-
-    // Get detailed distribution per package
-    const packageDistribution = await Promise.all(
-      packages.map(async (pkg) => {
-        const clientCount = await ClientInformation.count({
-          where: {
-            ...whereClause,
-            package: pkg.id,
-          },
-        });
-
-        const activeClients = await ClientInformation.count({
-          where: {
-            ...whereClause,
-            package: pkg.id,
-            status: "active",
-          },
-        });
-
-        const pendingClients = await ClientInformation.count({
-          where: {
-            ...whereClause,
-            package: pkg.id,
-            status: "pending",
-          },
-        });
-
-        const freeClients = await ClientInformation.count({
-          where: {
-            ...whereClause,
-            package: pkg.id,
-            isFreeClient: true,
-          },
-        });
-
-        const monthlyRevenue = activeClients * (parseFloat(pkg.packagePrice) || 0);
-        const annualRevenue = monthlyRevenue * 12;
-
-        // Get ALL clients for this package with pagination
-        const { count: totalHolderClients, rows: holderClients } =
-          await ClientInformation.findAndCountAll({
-            where: {
-              ...whereClause,
-              package: pkg.id,
-            },
-            attributes: [
-              "id",
-              "userId",
-              "fullName",
-              "mobileNo",
-              "email",
-              "photo",
-              "status",
-              "location",
-              "area",
-              "createdAt",
-              "costForPackage",
-              "customerType",
-              "isFreeClient",
-            ],
-            limit: limitNumber,
-            offset: offset,
-            order: [["createdAt", "DESC"]],
-          });
-
-        // Transform holder clients to include package details
-        const transformedHolderClients = await Promise.all(
-          holderClients.map(async (client) => {
-            const clientData = client.toJSON();
-
-            // Get package details if package exists
-            if (clientData.package) {
-              const packageDetails = await getPackageDetails(
-                clientData.package,
-              );
-              if (packageDetails) {
-                clientData.packageDetails = packageDetails;
-                clientData.packageName = packageDetails.packageName;
-              }
-            }
-
-            return {
-              id: clientData.id,
-              userId: clientData.userId,
-              fullName: clientData.fullName,
-              mobileNo: clientData.mobileNo,
-              email: clientData.email,
-              photo: clientData.photo,
-              status: clientData.status,
-              location: clientData.location,
-              area: clientData.area,
-              customerType: clientData.customerType,
-              isFreeClient: clientData.isFreeClient,
-              costForPackage: clientData.costForPackage,
-              packageName: clientData.packageName,
-              createdAt: clientData.createdAt,
-            };
-          }),
-        );
-
-        // Calculate growth rate
-        const clientGrowthRate = await calculateGrowthRate(pkg.id, whereClause);
-
-        return {
-          packageId: pkg.id,
-          packageName: pkg.packageName,
-          bandwidth: pkg.packageBandwidth,
-          price: parseFloat(pkg.packagePrice) || 0,
-          duration: pkg.duration,
-          packageType: pkg.packageType,
-          downloadSpeed: pkg.downloadSpeed,
-          uploadSpeed: pkg.uploadSpeed,
-          dataLimit: pkg.dataLimit,
-          installationFee: parseFloat(pkg.installationFee) || 0,
-          discount: parseFloat(pkg.discount) || 0,
-          packageStatus: pkg.status,
-
-          totalClients: clientCount,
-          activeClients: activeClients,
-          pendingClients: pendingClients,
-          inactiveClients: clientCount - activeClients - pendingClients,
-          freeClients: freeClients,
-          paidClients: clientCount - freeClients,
-
-          estimatedMonthlyRevenue: monthlyRevenue,
-          estimatedAnnualRevenue: annualRevenue,
-
-          holderClients: transformedHolderClients,
-
-          clientGrowthRate: clientGrowthRate,
-        };
-      }),
-    );
-
-    // Calculate package statistics
-    const activePackageDistribution = packageDistribution.filter(
-      (pkg) => pkg.packageStatus === "Active",
-    );
-
-    const totalSummary = {
-      totalPackages: packages.length,
-      activePackages: activePackageDistribution.length,
-      totalClients: packageDistribution.reduce(
-        (sum, pkg) => sum + pkg.totalClients,
-        0,
-      ),
-      totalActiveClients: packageDistribution.reduce(
-        (sum, pkg) => sum + pkg.activeClients,
-        0,
-      ),
-      totalMonthlyRevenue: packageDistribution.reduce(
-        (sum, pkg) => sum + pkg.estimatedMonthlyRevenue,
-        0,
-      ),
-      totalAnnualRevenue: packageDistribution.reduce(
-        (sum, pkg) => sum + pkg.estimatedAnnualRevenue,
-        0,
-      ),
-      averageClientsPerPackage:
-        packages.length > 0
-          ? packageDistribution.reduce(
-              (sum, pkg) => sum + pkg.totalClients,
-              0,
-            ) / packages.length
-          : 0,
-      mostPopularPackage:
-        packageDistribution.length > 0
-          ? packageDistribution.reduce((max, pkg) =>
-              pkg.totalClients > max.totalClients ? pkg : max,
-            )
-          : null,
+    // Build where clause for clients - exclude free clients (isFreeClient: false)
+    const whereClause = { 
+      role: "client", 
+      status: "active",
+      isFreeClient: false // Only include paying clients
     };
 
-    // Package performance analysis
-    const packagePerformance = packageDistribution.map((pkg) => {
-      const marketShare =
-        totalSummary.totalClients > 0
-          ? ((pkg.totalClients / totalSummary.totalClients) * 100).toFixed(2)
-          : 0;
+    // Location/Zone filter (zone and location are the same in your schema)
+    if (location) whereClause.location = location;
+    if (zone) whereClause.location = zone;
+    if (area) whereClause.area = area;
+    if (packageId) whereClause.package = packageId;
 
-      const revenueShare =
-        totalSummary.totalMonthlyRevenue > 0
-          ? (
-              (pkg.estimatedMonthlyRevenue / totalSummary.totalMonthlyRevenue) *
-              100
-            ).toFixed(2)
-          : 0;
+    // Get total count for pagination (without date filter initially)
+    let totalCount = await ClientInformation.count({ where: whereClause });
 
-      return {
-        packageName: pkg.packageName,
-        marketShare: parseFloat(marketShare),
-        revenueShare: parseFloat(revenueShare),
-        clientRetentionRate:
-          pkg.activeClients > 0
-            ? ((pkg.activeClients / pkg.totalClients) * 100).toFixed(2)
-            : 0,
-      };
-    });
-
-    // Get clients without packages
-    const clientsWithoutPackage = await ClientInformation.findAll({
-      where: {
-        ...whereClause,
-        package: null,
-      },
+    // Get active clients (without date filter initially)
+    let clients = await ClientInformation.findAll({
+      where: whereClause,
       attributes: [
         "id",
         "userId",
+        "customerId",
         "fullName",
         "mobileNo",
         "email",
-        "photo",
-        "status",
         "location",
         "area",
+        "package",
+        "costForPackage",
+        "status",
         "createdAt",
-        "customerType",
+        "updatedAt",
+        "isFreeClient",
       ],
-      limit: 10,
       order: [["createdAt", "DESC"]],
     });
 
-    // Transform clients without packages
-    const transformedClientsWithoutPackage = clientsWithoutPackage.map(
-      (client) => {
+    // Transform clients with additional data and apply last payment date filtering
+    let transformedClients = await Promise.all(
+      clients.map(async (client) => {
         const clientData = client.toJSON();
+
+        // Get package details
+        let packageName = "No Package";
+        let monthlyBill = 0;
+        if (clientData.package) {
+          const packageDetails = await getPackageDetails(clientData.package);
+          if (packageDetails) {
+            packageName = packageDetails.packageName;
+            monthlyBill = parseFloat(packageDetails.packagePrice) || 0;
+          }
+        }
+
+        // Use costForPackage if available, otherwise use package price
+        if (clientData.costForPackage) {
+          monthlyBill = parseFloat(clientData.costForPackage) || 0;
+        }
+
+        // Get last payment date
+        const lastPaymentDate = await getLastPaymentDate(clientData.userId);
+        
+        // Parse last payment date for filtering (only for non-free clients with payments)
+        let lastPaymentDateObj = null;
+        if (lastPaymentDate && lastPaymentDate !== "No Payment" && lastPaymentDate !== "Free Client") {
+          // Try to parse the date (assuming format DD/MM/YYYY)
+          const dateParts = lastPaymentDate.split('/');
+          if (dateParts.length === 3) {
+            lastPaymentDateObj = new Date(
+              parseInt(dateParts[2]), 
+              parseInt(dateParts[1]) - 1, 
+              parseInt(dateParts[0])
+            );
+          }
+        }
+
+        // Calculate due amount - ensure it's a number
+        const amountDue = await calculateClientDue(clientData.userId);
+        const safeAmountDue = isNaN(amountDue) ? 0 : amountDue;
+
         return {
-          id: clientData.id,
-          userId: clientData.userId,
-          fullName: clientData.fullName,
-          mobileNo: clientData.mobileNo,
-          email: clientData.email,
-          photo: clientData.photo,
-          status: clientData.status,
-          location: clientData.location,
-          area: clientData.area,
-          customerType: clientData.customerType,
-          createdAt: clientData.createdAt,
+          sl: null, // Will be filled on frontend
+          customerId: clientData.customerId || clientData.userId,
+          clientName: clientData.fullName,
+          mobile: clientData.mobileNo,
+          zone: clientData.location || "N/A",
+          area: clientData.area || "N/A",
+          package: packageName,
+          monthlyBill: monthlyBill.toFixed(2),
+          lastPayment: lastPaymentDate,
+          lastPaymentDate: lastPaymentDateObj, // Add for filtering
+          amountDue: safeAmountDue.toFixed(2),
+          isFreeClient: clientData.isFreeClient,
         };
-      },
+      })
     );
+
+    // Apply last payment date filtering if dates are provided
+    if (startDate || endDate) {
+      const start = startDate ? new Date(startDate) : null;
+      const end = endDate ? new Date(endDate) : null;
+      
+      if (start) start.setHours(0, 0, 0, 0);
+      if (end) end.setHours(23, 59, 59, 999);
+
+      transformedClients = transformedClients.filter(client => {
+        // Skip clients with no payment date (including free clients and those with no payments)
+        if (!client.lastPaymentDate) return false;
+        
+        let isValid = true;
+        
+        if (start) {
+          isValid = isValid && client.lastPaymentDate >= start;
+        }
+        
+        if (end) {
+          isValid = isValid && client.lastPaymentDate <= end;
+        }
+        
+        return isValid;
+      });
+
+      // Update total count based on filtered results
+      totalCount = transformedClients.length;
+    }
+
+    // Apply pagination after filtering
+    const paginatedClients = transformedClients.slice(offset, offset + limitNumber);
+
+    // Calculate summary with safe number handling (only for paying clients)
+    const totalMonthlyBill = paginatedClients.reduce(
+      (sum, client) => sum + (parseFloat(client.monthlyBill) || 0),
+      0
+    );
+    
+    const totalDue = paginatedClients.reduce(
+      (sum, client) => sum + (parseFloat(client.amountDue) || 0),
+      0
+    );
+
+    // Calculate collection rate safely
+    const collectionRate = totalMonthlyBill > 0
+      ? (((totalMonthlyBill - totalDue) / totalMonthlyBill) * 100).toFixed(2)
+      : "0.00";
+
+    // Get unique zones and areas for filters (excluding free clients)
+    const zones = await ClientInformation.findAll({
+      where: { 
+        role: "client", 
+        status: "active", 
+        location: { [Op.ne]: null },
+        isFreeClient: false // Only paying clients
+      },
+      attributes: [[sequelize.fn("DISTINCT", sequelize.col("location")), "location"]],
+    });
+
+    const areas = await ClientInformation.findAll({
+      where: { 
+        role: "client", 
+        status: "active", 
+        area: { [Op.ne]: null },
+        isFreeClient: false // Only paying clients
+      },
+      attributes: [[sequelize.fn("DISTINCT", sequelize.col("area")), "area"]],
+    });
+
+    const packages = await Package.findAll({
+      where: { status: "Active" },
+      attributes: ["id", "packageName"],
+    });
+
+    // Remove the temporary lastPaymentDate and isFreeClient fields from response
+    const clientsForResponse = paginatedClients.map(({ lastPaymentDate, isFreeClient, ...rest }) => rest);
 
     res.status(200).json({
       success: true,
       data: {
-        packageDistribution,
-        packagePerformance,
-        clientsWithoutPackage: transformedClientsWithoutPackage,
+        reportTitle: "Active Clients Report",
+        companyInfo: {
+          name: "Ring Tel",
+          mobile: "01601 997 701",
+          website: "www.rtel.com.bd",
+          email: "ringtel.isp@gmail.com",
+        },
+        period: {
+          startDate: startDate ? formatDate(startDate) : "All time",
+          endDate: endDate ? formatDate(endDate) : "Current",
+        },
+        generatedDate: formatDate(new Date()),
+        clients: clientsForResponse,
       },
       summary: {
-        ...totalSummary,
-        mostPopularPackage: totalSummary.mostPopularPackage
-          ? {
-              packageId: totalSummary.mostPopularPackage.packageId,
-              packageName: totalSummary.mostPopularPackage.packageName,
-              totalClients: totalSummary.mostPopularPackage.totalClients,
-              activeClients: totalSummary.mostPopularPackage.activeClients,
-              estimatedMonthlyRevenue:
-                totalSummary.mostPopularPackage.estimatedMonthlyRevenue,
-            }
-          : null,
-      },
-      analysis: {
-        packagePerformance,
-        recommendation: generatePackageRecommendations(packageDistribution),
+        totalActiveClients: paginatedClients.length,
+        totalMonthlyBill: totalMonthlyBill.toFixed(2),
+        totalDue: totalDue.toFixed(2),
+        averageBill: paginatedClients.length > 0 
+          ? (totalMonthlyBill / paginatedClients.length).toFixed(2)
+          : "0.00",
+        collectionRate: collectionRate,
       },
       filters: {
-        startDate,
-        endDate,
-        status,
-        location,
-        area,
-        packageType,
-        duration,
-        dateType,
-        page: pageNumber,
-        limit: limitNumber,
-      },
-    });
-  } catch (error) {
-    console.error("Error in package distribution report:", error);
-    next(error);
-  }
-};
-
-// Helper function to calculate growth rate
-async function calculateGrowthRate(packageId, whereClause) {
-  const now = new Date();
-  const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const twoMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 2, 1);
-
-  const currentMonthCount = await ClientInformation.count({
-    where: {
-      ...whereClause,
-      package: packageId,
-      createdAt: {
-        [Op.gte]: lastMonth,
-        [Op.lt]: now,
-      },
-    },
-  });
-
-  const previousMonthCount = await ClientInformation.count({
-    where: {
-      ...whereClause,
-      package: packageId,
-      createdAt: {
-        [Op.gte]: twoMonthsAgo,
-        [Op.lt]: lastMonth,
-      },
-    },
-  });
-
-  if (previousMonthCount === 0) return currentMonthCount > 0 ? 100 : 0;
-
-  return (
-    ((currentMonthCount - previousMonthCount) / previousMonthCount) *
-    100
-  ).toFixed(2);
-}
-
-// Helper function to generate package recommendations
-function generatePackageRecommendations(packageDistribution) {
-  const recommendations = [];
-
-  // Find underperforming packages
-  const underperforming = packageDistribution.filter(
-    (pkg) => pkg.totalClients < 5 && pkg.packageStatus === "Active",
-  );
-
-  if (underperforming.length > 0) {
-    recommendations.push({
-      type: "WARNING",
-      message: `${underperforming.length} packages have less than 5 clients: `,
-      packages: underperforming.map((pkg) => pkg.packageName),
-    });
-  }
-
-  // Find most profitable packages
-  const profitable = packageDistribution
-    .filter((pkg) => pkg.estimatedMonthlyRevenue > 0)
-    .sort((a, b) => b.estimatedMonthlyRevenue - a.estimatedMonthlyRevenue)
-    .slice(0, 3);
-
-  if (profitable.length > 0) {
-    recommendations.push({
-      type: "SUCCESS",
-      message: "Top 3 most profitable packages:",
-      packages: profitable.map(
-        (pkg) => `${pkg.packageName} ($${pkg.estimatedMonthlyRevenue}/month)`,
-      ),
-    });
-  }
-
-  return recommendations;
-}
-
-// Helper function to calculate growth rate
-async function calculateGrowthRate(packageId, whereClause) {
-  const now = new Date();
-  const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const twoMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 2, 1);
-
-  const currentMonthCount = await ClientInformation.count({
-    where: {
-      ...whereClause,
-      package: packageId,
-      createdAt: {
-        [Op.gte]: lastMonth,
-        [Op.lt]: now,
-      },
-    },
-  });
-
-  const previousMonthCount = await ClientInformation.count({
-    where: {
-      ...whereClause,
-      package: packageId,
-      createdAt: {
-        [Op.gte]: twoMonthsAgo,
-        [Op.lt]: lastMonth,
-      },
-    },
-  });
-
-  if (previousMonthCount === 0) return currentMonthCount > 0 ? 100 : 0;
-
-  return (
-    ((currentMonthCount - previousMonthCount) / previousMonthCount) *
-    100
-  ).toFixed(2);
-}
-
-// Helper function to generate package recommendations
-function generatePackageRecommendations(packageDistribution) {
-  const recommendations = [];
-
-  // Find underperforming packages
-  const underperforming = packageDistribution.filter(
-    (pkg) => pkg.totalClients < 5 && pkg.packageStatus === "Active",
-  );
-
-  if (underperforming.length > 0) {
-    recommendations.push({
-      type: "WARNING",
-      message: `${underperforming.length} packages have less than 5 clients: `,
-      packages: underperforming.map((pkg) => pkg.packageName),
-    });
-  }
-
-  // Find most profitable packages
-  const profitable = packageDistribution
-    .filter((pkg) => pkg.estimatedMonthlyRevenue > 0)
-    .sort((a, b) => b.estimatedMonthlyRevenue - a.estimatedMonthlyRevenue)
-    .slice(0, 3);
-
-  if (profitable.length > 0) {
-    recommendations.push({
-      type: "SUCCESS",
-      message: "Top 3 most profitable packages:",
-      packages: profitable.map(
-        (pkg) => `${pkg.packageName} ($${pkg.estimatedMonthlyRevenue}/month)`,
-      ),
-    });
-  }
-
-  return recommendations;
-}
-
-//! 4. CLIENT LOCATION REPORT - UPDATED
-const getClientLocationReport = async (req, res, next) => {
-  try {
-    const {
-      status,
-      customerType,
-      packageId,
-      startDate,
-      endDate,
-      dateType = "createdAt",
-      page = 1,
-      limit = 20,
-    } = req.query;
-
-    const pageNumber = parseInt(page, 10);
-    const limitNumber = parseInt(limit, 10);
-    const offset = (pageNumber - 1) * limitNumber;
-
-    const whereClause = { role: "client" };
-    if (status) whereClause.status = status;
-    if (customerType) whereClause.customerType = customerType;
-    if (packageId) whereClause.package = packageId;
-
-    // Date filter
-    if (startDate || endDate) {
-      const dateFilter = parseDateFilters(startDate, endDate, dateType);
-      Object.assign(whereClause, dateFilter);
-    }
-
-    // 1. LOCATION SUMMARY STATISTICS
-    const locationSummary = await ClientInformation.findAll({
-      where: whereClause,
-      attributes: [
-        "location",
-        [sequelize.fn("COUNT", sequelize.col("id")), "totalClients"],
-        [
-          sequelize.literal(
-            `SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END)`,
-          ),
-          "activeClients",
-        ],
-        [
-          sequelize.literal(
-            `SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END)`,
-          ),
-          "pendingClients",
-        ],
-        [
-          sequelize.literal(
-            `SUM(CASE WHEN isFreeClient = true THEN 1 ELSE 0 END)`,
-          ),
-          "freeClients",
-        ],
-        [sequelize.fn("SUM", sequelize.col("costForPackage")), "totalRevenue"],
-        [
-          sequelize.fn("AVG", sequelize.col("costForPackage")),
-          "avgRevenuePerClient",
-        ],
-        [sequelize.literal(`COUNT(DISTINCT area)`), "totalAreas"],
-      ],
-      group: ["location"],
-      order: [[sequelize.fn("COUNT", sequelize.col("id")), "DESC"]],
-      having: sequelize.where(
-        sequelize.fn("COUNT", sequelize.col("id")),
-        ">",
-        0,
-      ),
-    });
-
-    // 2. AREA-WISE BREAKDOWN FOR EACH LOCATION
-    const areaBreakdown = await ClientInformation.findAll({
-      where: whereClause,
-      attributes: [
-        "location",
-        "area",
-        [sequelize.fn("COUNT", sequelize.col("id")), "totalClients"],
-        [
-          sequelize.literal(
-            `SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END)`,
-          ),
-          "activeClients",
-        ],
-        [
-          sequelize.literal(
-            `SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END)`,
-          ),
-          "pendingClients",
-        ],
-        [sequelize.fn("SUM", sequelize.col("costForPackage")), "totalRevenue"],
-        [
-          sequelize.literal(`COUNT(DISTINCT customerType)`),
-          "customerTypeCount",
-        ],
-      ],
-      group: ["location", "area"],
-      order: [
-        ["location", "ASC"],
-        [sequelize.fn("COUNT", sequelize.col("id")), "DESC"],
-      ],
-    });
-
-    // 3. PACKAGE DISTRIBUTION BY LOCATION
-    const packageDistribution = await ClientInformation.findAll({
-      where: whereClause,
-      attributes: [
-        "location",
-        "package",
-        [sequelize.fn("COUNT", sequelize.col("id")), "clientCount"],
-        [sequelize.fn("SUM", sequelize.col("costForPackage")), "revenue"],
-      ],
-      group: ["location", "package"],
-      order: [
-        ["location", "ASC"],
-        [sequelize.fn("COUNT", sequelize.col("id")), "DESC"],
-      ],
-    });
-
-    // 4. LOCATION GROWTH TREND (LAST 12 MONTHS)
-    const locationGrowth = await ClientInformation.findAll({
-      where: whereClause,
-      attributes: [
-        "location",
-        [
-          sequelize.fn("DATE_FORMAT", sequelize.col("createdAt"), "%Y-%m"),
-          "month",
-        ],
-        [sequelize.fn("COUNT", sequelize.col("id")), "newClients"],
-        [
-          sequelize.literal(
-            `SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END)`,
-          ),
-          "activeNewClients",
-        ],
-      ],
-      group: [
-        "location",
-        sequelize.fn("DATE_FORMAT", sequelize.col("createdAt"), "%Y-%m"),
-      ],
-      order: [
-        ["location", "ASC"],
-        [
-          sequelize.fn("DATE_FORMAT", sequelize.col("createdAt"), "%Y-%m"),
-          "DESC",
-        ],
-      ],
-      limit: 60,
-    });
-
-    // 5. GET CLIENTS FOR EACH LOCATION (WITH PAGINATION)
-    const clientsByLocation = await Promise.all(
-      locationSummary.map(async (locationItem) => {
-        const locationData = locationItem.toJSON();
-
-        const { count: totalLocationClients, rows: locationClients } =
-          await ClientInformation.findAndCountAll({
-            where: {
-              ...whereClause,
-              location: locationData.location,
-            },
-            attributes: [
-              "id",
-              "userId",
-              "fullName",
-              "mobileNo",
-              "email",
-              "photo",
-              "status",
-              "customerType",
-              "package",
-              "costForPackage",
-              "area",
-              "isFreeClient",
-              "createdAt",
-            ],
-            limit: limitNumber,
-            offset: offset,
-            order: [["createdAt", "DESC"]],
-          });
-
-        // Transform clients with package details
-        const transformedClients = await Promise.all(
-          locationClients.map(async (client) => {
-            const clientData = client.toJSON();
-
-            // Get package details if package exists
-            if (clientData.package) {
-              const packageDetails = await getPackageDetails(
-                clientData.package,
-              );
-              if (packageDetails) {
-                clientData.packageName = packageDetails.packageName;
-                clientData.packagePrice = packageDetails.packagePrice;
-              }
-            }
-
-            return {
-              id: clientData.id,
-              userId: clientData.userId,
-              fullName: clientData.fullName,
-              mobileNo: clientData.mobileNo,
-              email: clientData.email,
-              photo: clientData.photo,
-              status: clientData.status,
-              customerType: clientData.customerType,
-              packageName: clientData.packageName,
-              costForPackage: clientData.costForPackage,
-              area: clientData.area,
-              isFreeClient: clientData.isFreeClient,
-              createdAt: clientData.createdAt,
-            };
-          }),
-        );
-
-        // Get areas for this location
-        const locationAreas = areaBreakdown
-          .filter((area) => area.dataValues.location === locationData.location)
-          .map((area) => ({
-            area: area.dataValues.area,
-            totalClients: parseInt(area.dataValues.totalClients || 0),
-            activeClients: parseInt(area.dataValues.activeClients || 0),
-            totalRevenue: parseFloat(area.dataValues.totalRevenue || 0),
-            customerTypeCount: parseInt(area.dataValues.customerTypeCount || 0),
-          }));
-
-        // Get growth data for this location
-        const locationGrowthData = locationGrowth
-          .filter(
-            (growth) => growth.dataValues.location === locationData.location,
-          )
-          .map((growth) => ({
-            month: growth.dataValues.month,
-            newClients: parseInt(growth.dataValues.newClients || 0),
-            activeNewClients: parseInt(growth.dataValues.activeNewClients || 0),
-          }));
-
-        return {
-          location: locationData.location,
-          summary: {
-            totalClients: parseInt(locationData.totalClients || 0),
-            activeClients: parseInt(locationData.activeClients || 0),
-            pendingClients: parseInt(locationData.pendingClients || 0),
-            freeClients: parseInt(locationData.freeClients || 0),
-            totalRevenue: parseFloat(locationData.totalRevenue || 0),
-            avgRevenuePerClient: parseFloat(
-              locationData.avgRevenuePerClient || 0,
-            ),
-            totalAreas: parseInt(locationData.totalAreas || 0),
-            coverageScore:
-              parseInt(locationData.totalClients) > 0
-                ? (
-                    (parseInt(locationData.activeClients) /
-                      parseInt(locationData.totalClients)) *
-                    100
-                  ).toFixed(2)
-                : 0,
-          },
-          areas: locationAreas,
-          clients: transformedClients,
-          growth: locationGrowthData,
-        };
-      }),
-    );
-
-    // 6. OVERALL SUMMARY STATISTICS
-    const overallSummary = {
-      totalLocations: locationSummary.length,
-      totalClients: locationSummary.reduce(
-        (sum, loc) => sum + parseInt(loc.dataValues.totalClients || 0),
-        0,
-      ),
-      totalActiveClients: locationSummary.reduce(
-        (sum, loc) => sum + parseInt(loc.dataValues.activeClients || 0),
-        0,
-      ),
-      totalRevenue: locationSummary.reduce(
-        (sum, loc) => sum + parseFloat(loc.dataValues.totalRevenue || 0),
-        0,
-      ),
-      totalAreas: new Set(areaBreakdown.map((area) => area.dataValues.area))
-        .size,
-      avgClientsPerLocation:
-        locationSummary.length > 0
-          ? locationSummary.reduce(
-              (sum, loc) => sum + parseInt(loc.dataValues.totalClients || 0),
-              0,
-            ) / locationSummary.length
-          : 0,
-      avgRevenuePerLocation:
-        locationSummary.length > 0
-          ? locationSummary.reduce(
-              (sum, loc) => sum + parseFloat(loc.dataValues.totalRevenue || 0),
-              0,
-            ) / locationSummary.length
-          : 0,
-    };
-
-    // 7. TOP PERFORMING LOCATIONS
-    const topPerformingLocations = locationSummary
-      .map((loc) => ({
-        location: loc.dataValues.location,
-        totalClients: parseInt(loc.dataValues.totalClients || 0),
-        totalRevenue: parseFloat(loc.dataValues.totalRevenue || 0),
-        coverageScore:
-          parseInt(loc.dataValues.totalClients) > 0
-            ? (
-                (parseInt(loc.dataValues.activeClients) /
-                  parseInt(loc.dataValues.totalClients)) *
-                100
-              ).toFixed(2)
-            : 0,
-      }))
-      .sort((a, b) => b.totalRevenue - a.totalRevenue)
-      .slice(0, 5);
-
-    // 8. AREA DENSITY ANALYSIS
-    const areaDensity = areaBreakdown
-      .map((area) => ({
-        location: area.dataValues.location,
-        area: area.dataValues.area,
-        clientDensity: parseInt(area.dataValues.totalClients || 0),
-        revenueDensity: parseFloat(area.dataValues.totalRevenue || 0),
-      }))
-      .sort((a, b) => b.clientDensity - a.clientDensity)
-      .slice(0, 10);
-
-    res.status(200).json({
-      success: true,
-      report: {
-        period: {
-          startDate: startDate || "All time",
-          endDate: endDate || "Current",
-          dateType: dateType,
-        },
-        filters: {
-          status,
-          customerType,
-          packageId,
-        },
-        summary: {
-          overall: overallSummary,
-          topPerformingLocations,
-          areaDensity,
-        },
-        locations: clientsByLocation,
-        analytics: {
-          locationCount: locationSummary.length,
-          areaCount: overallSummary.totalAreas,
-          clientDistribution: {
-            byStatus: {
-              active: overallSummary.totalActiveClients,
-              pending: locationSummary.reduce(
-                (sum, loc) =>
-                  sum + parseInt(loc.dataValues.pendingClients || 0),
-                0,
-              ),
-              free: locationSummary.reduce(
-                (sum, loc) => sum + parseInt(loc.dataValues.freeClients || 0),
-                0,
-              ),
-            },
-            byLocation: locationSummary.map((loc) => ({
-              location: loc.dataValues.location,
-              percentage:
-                overallSummary.totalClients > 0
-                  ? (
-                      (parseInt(loc.dataValues.totalClients) /
-                        overallSummary.totalClients) *
-                      100
-                    ).toFixed(2) + "%"
-                  : "0%",
-            })),
-          },
-        },
+        zones: zones.map(z => z.location).filter(Boolean),
+        areas: areas.map(a => a.area).filter(Boolean),
+        packages: packages.map(p => ({ id: p.id, name: p.packageName })),
       },
       pagination: {
         currentPage: pageNumber,
         itemsPerPage: limitNumber,
-        totalLocations: locationSummary.length,
-        hasNextPage:
-          pageNumber < Math.ceil(locationSummary.length / limitNumber),
+        totalItems: totalCount,
+        totalPages: Math.ceil(totalCount / limitNumber),
+        hasNextPage: pageNumber < Math.ceil(totalCount / limitNumber),
         hasPreviousPage: pageNumber > 1,
       },
     });
   } catch (error) {
-    console.error("Error in client location report:", error);
+    console.error("Error in active clients report:", error);
     next(error);
   }
 };
 
 
-
-
-
-
-
-
-
-
-
-//! 5. REFERRAL CLIENT REPORT - UPDATED
-const getReferralClientReport = async (req, res, next) => {
+//! 2. CLIENT DUE REPORT
+const getClientDueReport = async (req, res, next) => {
   try {
     const {
       startDate,
       endDate,
-      referrerId,
-      referrerType,
-      status,
+      location,
+      area,
+      packageId,
+      zone,
+      minDue = 1, // Only show clients with due > 0
       dateType = "createdAt",
       page = 1,
-      limit = 20,
+      limit = 100,
     } = req.query;
-
-    //! DEFINE COMMISSION AMOUNT PER ACTIVE REFERRAL (200 taka)
-    const COMMISSION_PER_ACTIVE_REFERRAL = 200;
 
     const pageNumber = parseInt(page, 10);
     const limitNumber = parseInt(limit, 10);
     const offset = (pageNumber - 1) * limitNumber;
 
-    // Build base where clause for referred clients
-    const referredWhereClause = {
+    // Build where clause
+    const whereClause = { 
       role: "client",
-      referId: { [Op.not]: null },
+      status: { [Op.in]: ["active", "pending"] } // Include active and pending clients
     };
 
-    if (status) referredWhereClause.status = status;
-    if (referrerId) referredWhereClause.referId = referrerId;
+    // Location/Zone filter
+    if (location) whereClause.location = location;
+    if (zone) whereClause.location = zone;
+    if (area) whereClause.area = area;
+    if (packageId) whereClause.package = packageId;
 
-    // Date filter for referred clients
+    // Date filter
     if (startDate || endDate) {
       const dateFilter = parseDateFilters(startDate, endDate, dateType);
-      Object.assign(referredWhereClause, dateFilter);
+      Object.assign(whereClause, dateFilter);
     }
 
-    // 1. GET ALL UNIQUE REFERRERS
-    const referralStats = await ClientInformation.findAll({
-      where: {
-        role: "client",
-        referId: { [Op.not]: null },
-      },
+    // Get all potential clients
+    const clients = await ClientInformation.findAll({
+      where: whereClause,
       attributes: [
-        "referId",
-        [sequelize.fn("COUNT", sequelize.col("id")), "referralCount"],
-        [
-          sequelize.literal(
-            `SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END)`
-          ),
-          "activeReferrals",
-        ],
-        [
-          sequelize.literal(
-            `SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END)`
-          ),
-          "pendingReferrals",
-        ],
-        [
-          sequelize.literal(
-            `SUM(CASE WHEN status = 'active' THEN ${COMMISSION_PER_ACTIVE_REFERRAL} ELSE 0 END)`
-          ),
-          "totalCommission",
-        ],
-        [sequelize.fn("SUM", sequelize.col("costForPackage")), "totalRevenue"],
-        [sequelize.fn("AVG", sequelize.col("costForPackage")), "avgRevenue"],
+        "id",
+        "userId",
+        "customerId",
+        "fullName",
+        "mobileNo",
+        "location",
+        "area",
+        "package",
+        "costForPackage",
+        "status",
+        "createdAt",
       ],
-      group: ["referId"],
-      having: sequelize.where(
-        sequelize.fn("COUNT", sequelize.col("id")),
-        ">",
-        0,
-      ),
-      order: [[sequelize.fn("COUNT", sequelize.col("id")), "DESC"]],
+      order: [["createdAt", "DESC"]],
+    });
+
+    // Calculate due for each client and filter those with due > minDue
+    const clientsWithDue = await Promise.all(
+      clients.map(async (client) => {
+        const clientData = client.toJSON();
+
+        // Get package details
+        let packageName = "No Package";
+        let monthlyBill = 0;
+        if (clientData.package) {
+          const packageDetails = await getPackageDetails(clientData.package);
+          if (packageDetails) {
+            packageName = packageDetails.packageName;
+            monthlyBill = parseFloat(packageDetails.packagePrice) || 0;
+          }
+        }
+
+        // Use costForPackage if available
+        if (clientData.costForPackage) {
+          monthlyBill = parseFloat(clientData.costForPackage) || 0;
+        }
+
+        // Calculate due amount
+        const dueAmount = await calculateClientDue(clientData.userId);
+        
+        if (dueAmount <= parseFloat(minDue)) {
+          return null;
+        }
+
+        // Get due months (simplified calculation)
+        const joinDate = new Date(clientData.createdAt);
+        const currentDate = new Date();
+        const monthsSinceJoin = Math.ceil(
+          (currentDate - joinDate) / (1000 * 60 * 60 * 24 * 30)
+        );
+        
+        // Get paid months count (simplified)
+        const totalPaid = await calculateTotalPayment(clientData.userId);
+        const paidMonths = Math.floor(totalPaid / monthlyBill);
+        const dueMonths = Math.max(0, monthsSinceJoin - paidMonths);
+
+        return {
+          sl: null,
+          clientName: clientData.fullName,
+          mobile: clientData.mobileNo,
+          zone: clientData.location || "N/A",
+          area: clientData.area || "N/A",
+          package: packageName,
+          dueMonth: dueMonths,
+          dueAmount: dueAmount.toFixed(2),
+        };
+      })
+    );
+
+    // Filter out null values
+    const dueClients = clientsWithDue.filter(client => client !== null);
+
+    // Apply pagination
+    const totalCount = dueClients.length;
+    const paginatedClients = dueClients.slice(offset, offset + limitNumber);
+
+    // Calculate summary
+    const totalDue = paginatedClients.reduce(
+      (sum, client) => sum + parseFloat(client.dueAmount || 0),
+      0
+    );
+    const totalDueMonths = paginatedClients.reduce(
+      (sum, client) => sum + client.dueMonth,
+      0
+    );
+
+    // Get unique zones and areas for filters
+    const zones = await ClientInformation.findAll({
+      where: { role: "client" },
+      attributes: [[sequelize.fn("DISTINCT", sequelize.col("location")), "location"]],
+      where: { location: { [Op.ne]: null } },
+    });
+
+    const areas = await ClientInformation.findAll({
+      where: { role: "client" },
+      attributes: [[sequelize.fn("DISTINCT", sequelize.col("area")), "area"]],
+      where: { area: { [Op.ne]: null } },
+    });
+
+    const packages = await Package.findAll({
+      where: { status: "Active" },
+      attributes: ["id", "packageName"],
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        reportTitle: "Client Due Report",
+        companyInfo: {
+          name: "Ring Tel",
+          mobile: "01601 997 701",
+          website: "www.rtel.com.bd",
+          email: "ringtel.isp@gmail.com",
+        },
+        period: {
+          startDate: startDate ? formatDate(startDate) : "All time",
+          endDate: endDate ? formatDate(endDate) : "Current",
+        },
+        generatedDate: formatDate(new Date()),
+        clients: paginatedClients,
+      },
+      summary: {
+        totalDueClients: paginatedClients.length,
+        totalDueAmount: totalDue.toFixed(2),
+        totalDueMonths: totalDueMonths,
+        averageDuePerClient: paginatedClients.length > 0 
+          ? (totalDue / paginatedClients.length).toFixed(2)
+          : "0.00",
+        averageDueMonths: paginatedClients.length > 0
+          ? (totalDueMonths / paginatedClients.length).toFixed(1)
+          : "0.0",
+      },
+      filters: {
+        zones: zones.map(z => z.location),
+        areas: areas.map(a => a.area),
+        packages: packages.map(p => ({ id: p.id, name: p.packageName })),
+      },
+      pagination: {
+        currentPage: pageNumber,
+        itemsPerPage: limitNumber,
+        totalItems: totalCount,
+        totalPages: Math.ceil(totalCount / limitNumber),
+        hasNextPage: pageNumber < Math.ceil(totalCount / limitNumber),
+        hasPreviousPage: pageNumber > 1,
+      },
+    });
+  } catch (error) {
+    console.error("Error in client due report:", error);
+    next(error);
+  }
+};
+
+//! 3. CLIENT LIST REPORT
+const getClientListReport = async (req, res, next) => {
+  try {
+    const {
+      startDate,
+      endDate,
+      location,
+      area,
+      packageId,
+      zone,
+      status,
+      customerType,
+      dateType = "createdAt",
+      page = 1,
+      limit = 100,
+    } = req.query;
+
+    const pageNumber = parseInt(page, 10);
+    const limitNumber = parseInt(limit, 10);
+    const offset = (pageNumber - 1) * limitNumber;
+
+    // Build where clause
+    const whereClause = { role: "client" };
+
+    // Filters
+    if (location) whereClause.location = location;
+    if (zone) whereClause.location = zone;
+    if (area) whereClause.area = area;
+    if (packageId) whereClause.package = packageId;
+    if (status) whereClause.status = status;
+    if (customerType) whereClause.customerType = customerType;
+
+    // Date filter
+    if (startDate || endDate) {
+      const dateFilter = parseDateFilters(startDate, endDate, dateType);
+      Object.assign(whereClause, dateFilter);
+    }
+
+    // Get total count
+    const totalCount = await ClientInformation.count({ where: whereClause });
+
+    // Get clients
+    const clients = await ClientInformation.findAll({
+      where: whereClause,
+      attributes: [
+        "id",
+        "userId",
+        "customerId",
+        "fullName",
+        "mobileNo",
+        "email",
+        "location",
+        "area",
+        "package",
+        "costForPackage",
+        "status",
+        "referId",
+        "createdAt",
+      ],
+      order: [["createdAt", "DESC"]],
       limit: limitNumber,
       offset: offset,
     });
 
-    // Apply date filter to referral stats
-    if (startDate || endDate) {
-      const dateFilter = parseDateFilters(startDate, endDate, dateType);
-      referralStats.forEach((stat) => {
-        stat.where = { ...stat.where, ...dateFilter };
-      });
-    }
+    // Transform clients with additional data
+    const transformedClients = await Promise.all(
+      clients.map(async (client, index) => {
+        const clientData = client.toJSON();
 
-    // 2. GET DETAILED INFORMATION FOR EACH REFERRER AND THEIR REFERRALS
-    const referrersWithDetails = await Promise.all(
-      referralStats.map(async (stat) => {
-        const referrerData = stat.toJSON();
-        const referrerId = referrerData.referId;
-
-        // Skip invalid referrer IDs
-        if (!referrerId || referrerId === "N/A") {
-          return null;
+        // Get package details
+        let packageName = "No Package";
+        let monthlyBill = 0;
+        if (clientData.package) {
+          const packageDetails = await getPackageDetails(clientData.package);
+          if (packageDetails) {
+            packageName = packageDetails.packageName;
+            monthlyBill = parseFloat(packageDetails.packagePrice) || 0;
+          }
         }
 
-        // Find referrer (could be client or employee)
-        let referrer = await ClientInformation.findOne({
-          where: { userId: referrerId },
-          attributes: [
-            "id",
-            "userId",
-            "fullName",
-            "mobileNo",
-            "email",
-            "photo",
-            "role",
-            "status",
-            "createdAt",
-            "location",
-            "customerType",
-          ],
-        });
+        // Use costForPackage if available
+        if (clientData.costForPackage) {
+          monthlyBill = parseFloat(clientData.costForPackage) || 0;
+        }
 
-        let referrerTypeDB = "client";
-
-        if (!referrer) {
-          referrer = await AuthorityInformation.findOne({
-            where: { userId: referrerId },
-            attributes: [
-              "id",
-              "fullName",
-              "mobileNo",
-              "email",
-              "photo",
-              "role",
-              "status",
-              "createdAt",
-              "jobType",
-              "baseSalary",
-            ],
+        // Get referrer name if available
+        let referrerName = "None";
+        if (clientData.referId && clientData.referId !== "N/A") {
+          const referrer = await ClientInformation.findOne({
+            where: { userId: clientData.referId },
+            attributes: ["fullName"],
           });
-          referrerTypeDB = "employee";
-        }
-
-        // If referrer not found, skip
-        if (!referrer) {
-          return null;
-        }
-
-        const referrerInfo = referrer.toJSON();
-
-        // Get all clients referred by this referrer
-        const referredClients = await ClientInformation.findAll({
-          where: {
-            ...referredWhereClause,
-            referId: referrerId,
-          },
-          attributes: [
-            "id",
-            "userId",
-            "fullName",
-            "mobileNo",
-            "email",
-            "photo",
-            "status",
-            "package",
-            "location",
-            "area",
-            "customerType",
-            "costForPackage",
-            "createdAt",
-            "userAddedBy",
-          ],
-          order: [["createdAt", "DESC"]],
-        });
-
-        // Transform referred clients with package details
-        const transformedReferredClients = await Promise.all(
-          referredClients.map(async (client) => {
-            const clientData = client.toJSON();
-
-            // Calculate commission for this referral (200 taka for active clients)
-            const commissionAmount = clientData.status === 'active' ? COMMISSION_PER_ACTIVE_REFERRAL : 0;
-
-            // Get package details if package exists
-            if (clientData.package) {
-              const packageDetails = await getPackageDetails(
-                clientData.package,
-              );
-              if (packageDetails) {
-                clientData.packageName = packageDetails.packageName;
-                clientData.packagePrice = packageDetails.packagePrice;
-              }
+          if (referrer) {
+            referrerName = referrer.fullName;
+          } else {
+            const employee = await AuthorityInformation.findOne({
+              where: { userId: clientData.referId },
+              attributes: ["fullName"],
+            });
+            if (employee) {
+              referrerName = employee.fullName;
             }
-
-            // Get added by user details if available
-            let addedByDetails = null;
-            if (clientData.userAddedBy) {
-              const addedBy = await AuthorityInformation.findOne({
-                where: { userId: clientData.userAddedBy },
-                attributes: ["fullName", "mobileNo", "email", "role"],
-              });
-              addedByDetails = addedBy ? addedBy.toJSON() : null;
-            }
-
-            return {
-              id: clientData.id,
-              userId: clientData.userId,
-              fullName: clientData.fullName,
-              mobileNo: clientData.mobileNo,
-              email: clientData.email,
-              photo: clientData.photo,
-              status: clientData.status,
-              packageName: clientData.packageName,
-              location: clientData.location,
-              area: clientData.area,
-              customerType: clientData.customerType,
-              costForPackage: clientData.costForPackage,
-              createdAt: clientData.createdAt,
-              addedByDetails: addedByDetails,
-              commission: {
-                amount: commissionAmount,
-                status: "pending", // Since we don't have payment tracking
-                eligible: clientData.status === 'active',
-              },
-            };
-          }),
-        );
-
-        // Calculate success rate
-        const totalReferrals = parseInt(referrerData.referralCount || 0);
-        const activeReferrals = parseInt(referrerData.activeReferrals || 0);
-        const totalCommission = parseFloat(referrerData.totalCommission || 0);
-        const successRate =
-          totalReferrals > 0
-            ? ((activeReferrals / totalReferrals) * 100).toFixed(2)
-            : "0.00";
+          }
+        }
 
         return {
-          referrer: {
-            id: referrerInfo.id,
-            userId: referrerInfo.userId,
-            fullName: referrerInfo.fullName,
-            mobileNo: referrerInfo.mobileNo,
-            email: referrerInfo.email,
-            photo: referrerInfo.photo,
-            type: referrerTypeDB,
-            role: referrerInfo.role,
-            status: referrerInfo.status,
-            location: referrerInfo.location,
-            joinDate: referrerInfo.createdAt,
-            customerType: referrerInfo.customerType,
-            jobType: referrerInfo.jobType,
-            baseSalary: referrerInfo.baseSalary,
-          },
-          referralStats: {
-            totalReferrals: totalReferrals,
-            activeReferrals: activeReferrals,
-            pendingReferrals: parseInt(referrerData.pendingReferrals || 0),
-            totalRevenue: parseFloat(referrerData.totalRevenue || 0),
-            avgRevenue: parseFloat(referrerData.avgRevenue || 0),
-            totalCommission: totalCommission,
-            avgCommissionPerReferral: totalReferrals > 0 ? (totalCommission / totalReferrals).toFixed(2) : "0.00",
-            pendingCommission: totalCommission, // All commission is pending since no payment tracking
-            paidCommission: 0,
-            successRate: successRate + "%",
-          },
-          referredClients: transformedReferredClients,
+          sl: offset + index + 1,
+          customerId: clientData.customerId || clientData.userId,
+          clientName: clientData.fullName,
+          mobile: clientData.mobileNo,
+          zone: clientData.location || "N/A",
+          area: clientData.area || "N/A",
+          package: packageName,
+          monthlyBill: monthlyBill.toFixed(2),
+          referral: referrerName,
+          joinDate: formatDate(clientData.createdAt),
+          status: clientData.status,
         };
-      }),
+      })
     );
 
-    // Filter out null referrers and by referrer type if specified
-    let filteredReferrers = referrersWithDetails.filter(
-      (item) => item !== null,
-    );
-    if (referrerType) {
-      filteredReferrers = filteredReferrers.filter(
-        (item) => item.referrer.type === referrerType,
-      );
-    }
-
-    // 3. GET TOTAL COUNT FOR PAGINATION
-    const totalReferrersCount = await ClientInformation.count({
-      distinct: true,
-      col: "referId",
-      where: {
-        role: "client",
-        referId: { [Op.not]: null, [Op.ne]: "N/A" },
-      },
-    });
-
-    // 4. MONTHLY REFERRAL TREND
-    const monthlyReferralTrend = await ClientInformation.findAll({
-      where: referredWhereClause,
+    // Calculate summary
+    const statusBreakdown = await ClientInformation.findAll({
+      where: { role: "client" },
       attributes: [
-        [
-          sequelize.fn("DATE_FORMAT", sequelize.col("createdAt"), "%Y-%m"),
-          "month",
-        ],
-        [sequelize.fn("COUNT", sequelize.col("id")), "referralCount"],
-        [
-          sequelize.literal(
-            `SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END)`
-          ),
-          "activeReferrals",
-        ],
-        [
-          sequelize.literal(
-            `SUM(CASE WHEN status = 'active' THEN ${COMMISSION_PER_ACTIVE_REFERRAL} ELSE 0 END)`
-          ),
-          "commission",
-        ],
-        [sequelize.fn("SUM", sequelize.col("costForPackage")), "revenue"],
+        "status",
+        [sequelize.fn("COUNT", sequelize.col("id")), "count"],
       ],
-      group: [sequelize.fn("DATE_FORMAT", sequelize.col("createdAt"), "%Y-%m")],
-      order: [
-        [
-          sequelize.fn("DATE_FORMAT", sequelize.col("createdAt"), "%Y-%m"),
-          "ASC",
-        ],
-      ],
-      limit: 12,
+      group: ["status"],
     });
 
-    // 5. CALCULATE OVERALL PERFORMANCE METRICS
-    const totalReferrals = filteredReferrers.reduce(
-      (sum, item) => sum + item.referralStats.totalReferrals,
-      0,
-    );
+    // Get unique values for filters
+    const zones = await ClientInformation.findAll({
+      where: { role: "client" },
+      attributes: [[sequelize.fn("DISTINCT", sequelize.col("location")), "location"]],
+      where: { location: { [Op.ne]: null } },
+    });
 
-    const activeReferrals = filteredReferrers.reduce(
-      (sum, item) => sum + item.referralStats.activeReferrals,
-      0,
-    );
+    const areas = await ClientInformation.findAll({
+      where: { role: "client" },
+      attributes: [[sequelize.fn("DISTINCT", sequelize.col("area")), "area"]],
+      where: { area: { [Op.ne]: null } },
+    });
 
-    const pendingReferrals = filteredReferrers.reduce(
-      (sum, item) => sum + item.referralStats.pendingReferrals,
-      0,
-    );
-
-    const totalRevenue = filteredReferrers.reduce(
-      (sum, item) => sum + item.referralStats.totalRevenue,
-      0,
-    );
-
-    const totalCommission = filteredReferrers.reduce(
-      (sum, item) => sum + item.referralStats.totalCommission,
-      0,
-    );
-
-    const pendingCommission = filteredReferrers.reduce(
-      (sum, item) => sum + item.referralStats.pendingCommission,
-      0,
-    );
-
-    const paidCommission = filteredReferrers.reduce(
-      (sum, item) => sum + item.referralStats.paidCommission,
-      0,
-    );
-
-    const avgRevenuePerReferral =
-      totalReferrals > 0 ? totalRevenue / totalReferrals : 0;
-    const conversionRate =
-      totalReferrals > 0
-        ? ((activeReferrals / totalReferrals) * 100).toFixed(2)
-        : "0.00";
-
-    // 6. TOP PERFORMING REFERRERS (by commission earned)
-    const topPerformingReferrers = [...filteredReferrers]
-      .sort(
-        (a, b) => b.referralStats.totalCommission - a.referralStats.totalCommission,
-      )
-      .slice(0, 5)
-      .map((item) => ({
-        referrerName: item.referrer.fullName,
-        referrerType: item.referrer.type,
-        totalReferrals: item.referralStats.totalReferrals,
-        activeReferrals: item.referralStats.activeReferrals,
-        totalCommission: item.referralStats.totalCommission,
-        successRate: item.referralStats.successRate,
-      }));
+    const packages = await Package.findAll({
+      attributes: ["id", "packageName"],
+    });
 
     res.status(200).json({
       success: true,
-      report: {
+      data: {
+        reportTitle: "Client List Report",
+        companyInfo: {
+          name: "Ring Tel",
+          mobile: "01601 997 701",
+          website: "www.rtel.com.bd",
+          email: "ringtel.isp@gmail.com",
+        },
         period: {
-          startDate: startDate || "All time",
-          endDate: endDate || "Current",
-          dateType: dateType,
+          startDate: startDate ? formatDate(startDate) : "All time",
+          endDate: endDate ? formatDate(endDate) : "Current",
         },
-        filters: {
-          referrerType,
-          status,
-          referrerId,
-        },
-        commissionSettings: {
-          commissionPerActiveReferral: COMMISSION_PER_ACTIVE_REFERRAL,
-          currency: "BDT (Taka)",
-          eligibility: "Only for active referrals",
-          note: "Commission tracking is calculated on-the-fly. No payment tracking available without database changes.",
-        },
-        summary: {
-          totalReferrers: filteredReferrers.length,
-          totalReferrals: totalReferrals,
-          activeReferrals: activeReferrals,
-          pendingReferrals: pendingReferrals,
-          totalRevenue: totalRevenue.toFixed(2),
-          avgRevenuePerReferral: avgRevenuePerReferral.toFixed(2),
-          totalCommission: totalCommission.toFixed(2),
-          pendingCommission: pendingCommission.toFixed(2),
-          paidCommission: paidCommission.toFixed(2),
-          avgCommissionPerActiveReferral: COMMISSION_PER_ACTIVE_REFERRAL.toFixed(2),
-          conversionRate: conversionRate + "%",
-          activeReferralRate:
-            totalReferrals > 0
-              ? ((activeReferrals / totalReferrals) * 100).toFixed(2) + "%"
-              : "0%",
-        },
-        analytics: {
-          monthlyReferralTrend: monthlyReferralTrend.map((trend) =>
-            trend.toJSON(),
-          ),
-          topPerformingReferrers,
-        },
-        referrers: filteredReferrers,
+        generatedDate: formatDate(new Date()),
+        clients: transformedClients,
+      },
+      summary: {
+        totalClients: totalCount,
+        activeClients: statusBreakdown.find(s => s.status === "active")?.dataValues.count || 0,
+        pendingClients: statusBreakdown.find(s => s.status === "pending")?.dataValues.count || 0,
+        inactiveClients: statusBreakdown.find(s => s.status === "inactive")?.dataValues.count || 0,
+      },
+      filters: {
+        zones: zones.map(z => z.location),
+        areas: areas.map(a => a.area),
+        packages: packages.map(p => ({ id: p.id, name: p.packageName })),
+        statuses: ["active", "pending", "inactive"],
+        customerTypes: ["Residential", "Business", "Corporate"], // Adjust based on your data
       },
       pagination: {
         currentPage: pageNumber,
         itemsPerPage: limitNumber,
-        totalItems: totalReferrersCount,
-        totalPages: Math.ceil(totalReferrersCount / limitNumber),
-        hasNextPage: pageNumber < Math.ceil(totalReferrersCount / limitNumber),
+        totalItems: totalCount,
+        totalPages: Math.ceil(totalCount / limitNumber),
+        hasNextPage: pageNumber < Math.ceil(totalCount / limitNumber),
         hasPreviousPage: pageNumber > 1,
       },
     });
   } catch (error) {
-    console.error("Error in referral client report:", error);
+    console.error("Error in client list report:", error);
     next(error);
   }
 };
 
-
-
-
 module.exports = {
-  getClientStatusReport,
-  getClientPackageDistributionReport,
-  getClientLocationReport,
-  getReferralClientReport,
+  getActiveClientsReport,
+  getClientDueReport,
+  getClientListReport,
 };

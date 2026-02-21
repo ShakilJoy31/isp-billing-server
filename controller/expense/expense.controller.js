@@ -766,7 +766,7 @@ const approveExpense = async (req, res, next) => {
   
   try {
     const { id } = req.params;
-
+    const {approvedBy} = req.body;
     if (!id || isNaN(id)) {
       await transaction.rollback();
       return res.status(400).json({ 
@@ -798,9 +798,6 @@ const approveExpense = async (req, res, next) => {
       }],
       transaction
     });
-
-    console.log('Expense:', expense.expenseCode);
-    console.log('Number of payments found:', expensePayments.length);
 
     if (expensePayments.length === 0) {
       await transaction.rollback();
@@ -859,9 +856,6 @@ const approveExpense = async (req, res, next) => {
     for (const payment of expensePayments) {
       const newBalance = parseFloat(payment.account.currentBalance) - parseFloat(payment.paymentAmount);
       
-      console.log(`Deducting ${payment.paymentAmount} from account ${payment.account.accountName}`);
-      console.log(`Old balance: ${payment.account.currentBalance}, New balance: ${newBalance}`);
-      
       await payment.account.update({
         currentBalance: newBalance,
         lastTransactionDate: new Date()
@@ -878,9 +872,9 @@ const approveExpense = async (req, res, next) => {
     await expense.update({
       status: 'Approved',
       paymentStatus: 'Paid',
-      approvedBy: req.user?.id || 'admin',
+      approvedBy: approvedBy,
       approvedAt: new Date(),
-      updatedBy: req.user?.id || 'admin'
+      updatedBy: approvedBy
     }, { transaction });
 
     await transaction.commit();

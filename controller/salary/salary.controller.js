@@ -53,12 +53,13 @@ const createSalary = async (req, res, next) => {
       });
     }
 
-    // Calculate total salary
+    // Calculate total salary - All values default to 0 if not provided
     const totalAllowances = (houseRent || 0) + (medicalAllowance || 0) + (travelAllowance || 0) + (otherAllowances || 0);
     const totalBonuses = (performanceBonus || 0) + (festivalBonus || 0) + (otherBonuses || 0);
     const totalDeductions = (providentFund || 0) + (taxDeduction || 0) + (otherDeductions || 0);
     const overtimePay = (overtimeHours || 0) * (overtimeRate || 0);
     
+    // Gross salary can be from basicSalary + allowances OR just bonuses OR both
     const grossSalary = (basicSalary || 0) + totalAllowances + overtimePay + totalBonuses;
     const netSalary = grossSalary - totalDeductions;
 
@@ -78,7 +79,7 @@ const createSalary = async (req, res, next) => {
       });
     }
 
-    // Create new salary record
+    // Create new salary record - All numeric fields default to 0
     const newSalary = await Salary.create({
       employeeId,
       employeeName,
@@ -125,7 +126,7 @@ const createSalary = async (req, res, next) => {
           "Salary receive",
           employee.mobileNo,
           employee.id,
-          null, // Use default message from database
+          null,
           {
             fullName: employee.fullName,
             salaryAmount: netSalary.toFixed(2),
@@ -148,7 +149,7 @@ const createSalary = async (req, res, next) => {
           "Salary receive",
           '+8801684175551',
           employee.id,
-          null, // Use default message from database
+          null,
           {
             fullName: employee.fullName,
             salaryAmount: netSalary.toFixed(2),
@@ -191,7 +192,6 @@ const getAllSalaries = async (req, res, next) => {
       limit = 10,
     } = req.query;
 
-    // Build where clause for filtering
     const whereClause = {};
 
     if (month) whereClause.salaryMonth = month;
@@ -202,6 +202,7 @@ const getAllSalaries = async (req, res, next) => {
 
     const offset = (parseInt(page) - 1) * parseInt(limit);
 
+    // Get salaries first
     const salaries = await Salary.findAndCountAll({
       where: whereClause,
       order: [["createdAt", "DESC"]],
@@ -209,9 +210,36 @@ const getAllSalaries = async (req, res, next) => {
       offset: offset,
     });
 
+    // Get all unique employeeIds from the salaries
+    const employeeIds = [...new Set(salaries.rows.map(s => s.employeeId))];
+    
+    // Fetch emails for these employeeIds from AuthorityInformation
+    const employees = await AuthorityInformation.findAll({
+      where: {
+        userId: employeeIds
+      },
+      attributes: ['userId', 'email']
+    });
+
+    // Create a map of userId -> email
+    const emailMap = {};
+    employees.forEach(emp => {
+      emailMap[emp.userId] = emp.email;
+    });
+
+    // Transform salaries - replace employeeId with email
+    const transformedSalaries = salaries.rows.map(salary => {
+      const salaryData = salary.toJSON();
+      return {
+        ...salaryData,
+        // Replace employeeId with email if found, otherwise keep original
+        employeeId: emailMap[salaryData.employeeId] || salaryData.employeeId
+      };
+    });
+
     return res.status(200).json({
       message: "Salaries retrieved successfully!",
-      salaries: salaries.rows,
+      salaries: transformedSalaries,
       totalCount: salaries.count,
       totalPages: Math.ceil(salaries.count / parseInt(limit)),
       currentPage: parseInt(page),
@@ -282,7 +310,7 @@ const getSalariesByEmployee = async (req, res, next) => {
   }
 };
 
-//! Update salary record
+// Update salary record
 const updateSalary = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -293,26 +321,25 @@ const updateSalary = async (req, res, next) => {
       return res.status(400).json({ message: "Invalid salary ID" });
     }
 
-    // Find the salary record
     const salary = await Salary.findOne({ where: { id } });
 
     if (!salary) {
       return res.status(404).json({ message: "Salary record not found" });
     }
 
-    // Remove id and salaryId from update data to prevent modification
     delete updateData.id;
     delete updateData.salaryId;
 
-    // Update the salary record
     await salary.update(updateData);
 
     if (updateData.paymentStatus === "paid") {
       const employee = await AuthorityInformation.findOne({
         where: { userId: updateData.employee },
       });
-      const result = await sendSMSHelper("Salary receive", employee.mobileNo);
-      const adminCopySms = await sendSMSHelper("Salary receive", '+8801684175551');
+      if (employee) {
+        await sendSMSHelper("Salary receive", employee.mobileNo);
+        await sendSMSHelper("Salary receive", '+8801684175551');
+      }
     }
 
     return res.status(200).json({
