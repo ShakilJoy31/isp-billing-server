@@ -1,8 +1,9 @@
 const AuthorityInformation = require("../../models/Authentication/authority.model");
 const Salary = require("../../models/salary/salary.model");
 const { sendSMSHelper } = require("../../utils/helper/sendSMS");
+const { sequelize } = require("../../database/connection");
 
-// Create new salary record
+//! Create new salary record
 const createSalary = async (req, res, next) => {
   try {
     const {
@@ -35,6 +36,7 @@ const createSalary = async (req, res, next) => {
       paymentDate,
       paymentMethod,
       bankAccount,
+      salarySlipUrl,
       note,
     } = req.body;
 
@@ -110,6 +112,7 @@ const createSalary = async (req, res, next) => {
       paymentDate,
       paymentMethod,
       bankAccount,
+      salarySlipUrl: salarySlipUrl || null,
       createdBy: req.user?.id || "admin",
       note,
     });
@@ -179,7 +182,7 @@ const createSalary = async (req, res, next) => {
   }
 };
 
-// Get all salary records with optional filtering
+//! Get all salary records with optional filtering
 const getAllSalaries = async (req, res, next) => {
   try {
     const {
@@ -250,7 +253,7 @@ const getAllSalaries = async (req, res, next) => {
   }
 };
 
-// Get salary by ID
+//! Get salary by ID
 const getSalaryById = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -275,7 +278,7 @@ const getSalaryById = async (req, res, next) => {
   }
 };
 
-// Get salaries by employee ID
+//! Get salaries by employee ID
 const getSalariesByEmployee = async (req, res, next) => {
   try {
     const { employeeId } = req.params;
@@ -310,7 +313,7 @@ const getSalariesByEmployee = async (req, res, next) => {
   }
 };
 
-// Update salary record
+//! Update salary record
 const updateSalary = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -352,7 +355,7 @@ const updateSalary = async (req, res, next) => {
   }
 };
 
-// Delete salary record
+//! Delete salary record
 const deleteSalary = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -378,7 +381,7 @@ const deleteSalary = async (req, res, next) => {
   }
 };
 
-// Get salary summary (for dashboard)
+//! Get salary summary (for dashboard)
 const getSalarySummary = async (req, res, next) => {
   try {
     const { month, year } = req.query;

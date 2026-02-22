@@ -161,6 +161,13 @@ const Salary = sequelize.define(
       allowNull: true,
     },
 
+    // File Uploads
+    salarySlipUrl: {
+      type: dt.STRING,
+      allowNull: true,
+      comment: "URL to uploaded salary slip PDF/image",
+    },
+
     // Metadata
     createdBy: {
       type: dt.STRING,
@@ -184,7 +191,7 @@ const Salary = sequelize.define(
             .padStart(3, "0");
           salary.salaryId = `SAL-${monthYear}-${random}`;
         }
-         // Calculate overtime amount if not provided
+        // Calculate overtime amount if not provided
         if (
           salary.overtimeHours > 0 &&
           salary.overtimeRate > 0 &&

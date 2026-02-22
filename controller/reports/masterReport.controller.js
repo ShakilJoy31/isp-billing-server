@@ -8,6 +8,8 @@ const EmployeePayment = require("../../models/payment/employee-payment.model");
 const Transaction = require("../../models/payment/client-payment.model");
 const ExpenseCategory = require("../../models/expense/category.model");
 
+// ==================== HELPER FUNCTIONS ====================
+
 // Helper function to parse date filters
 const parseDateFilters = (startDate, endDate, field = "createdAt") => {
   const filter = {};
@@ -92,12 +94,207 @@ const getPackageDetails = async (packageId) => {
   }
 };
 
-// Helper function to calculate referral commission (based on your business logic)
-const calculateReferralCommission = (client) => {
-  // Default commission is 200 BDT per active client
+// Helper function to get client details
+const getClientDetails = async (userId) => {
+  if (!userId) return null;
+  try {
+    const client = await ClientInformation.findOne({
+      where: { id: userId },
+      attributes: ["id", "userId", "customerId", "fullName", "mobileNo", "location", "area", "status"]
+    });
+    return client ? client.toJSON() : null;
+  } catch (error) {
+    console.error("Error fetching client details:", error);
+    return null;
+  }
+};
+
+//! Helper function to calculate income from transactions
+const calculateTransactionIncome = async (start, end) => {
+  try {
+    const transactions = await Transaction.findAll({
+      where: {
+        status: "approved",
+        createdAt: {
+          [Op.between]: [start, end]
+        }
+      },
+      attributes: ["amount", "userId", "billingMonth", "billingYear", "createdAt"]
+    });
+
+    let total = 0;
+    const details = [];
+
+    for (const transaction of transactions) {
+      const amount = parseFloat(transaction.amount) || 0;
+      total += amount;
+      
+      const clientInfo = await getClientDetails(transaction.userId);
+
+      console.log(clientInfo,transaction.userId, 'ccccccccc')
+      
+      details.push({
+        type: "Transaction",
+        userId: transaction.userId,
+        clientName: clientInfo?.fullName || "Unknown",
+        clientId: clientInfo?.customerId || transaction.userId,
+        amount: amount,
+        billingMonth: transaction.billingMonth,
+        billingYear: transaction.billingYear,
+        date: transaction.createdAt,
+        source: "Client Direct Payment"
+      });
+    }
+    return { total, details };
+  } catch (error) {
+    console.error("Error calculating transaction income:", error);
+    return { total: 0, details: [] };
+  }
+};
+
+//! Helper function to calculate income from employee collections
+const calculateEmployeeCollectionIncome = async (start, end) => {
+  try {
+    const employeePayments = await EmployeePayment.findAll({
+      where: {
+        status: { [Op.in]: ["collected", "verified", "deposited"] },
+        collectionDate: {
+          [Op.between]: [start, end]
+        }
+      },
+      attributes: ["amount", "discount", "clientId", "clientName", "billingMonth", "employeeName", "collectionDate", "receiptNumber", "status"]
+    });
+
+    let total = 0;
+    const details = [];
+
+    for (const payment of employeePayments) {
+      const amount = parseFloat(payment.amount) || 0;
+      const discount = parseFloat(payment.discount) || 0;
+      const netAmount = amount - discount;
+      total += netAmount;
+      
+      details.push({
+        type: "Employee Collection",
+        clientId: payment.clientId,
+        clientName: payment.clientName,
+        amount: amount,
+        discount: discount,
+        netAmount: netAmount,
+        billingMonth: payment.billingMonth,
+        collectedBy: payment.employeeName,
+        receiptNumber: payment.receiptNumber,
+        date: payment.collectionDate,
+        status: payment.status,
+        source: "Employee Collection"
+      });
+    }
+
+    return { total, details };
+  } catch (error) {
+    console.error("Error calculating employee collection income:", error);
+    return { total: 0, details: [] };
+  }
+};
+
+// Helper function to calculate expenses
+const calculateExpenses = async (start, end) => {
+  try {
+    // Format dates for database query
+    const startDateStr = start.toISOString().split('T')[0];
+    const endDateStr = end.toISOString().split('T')[0];
+    
+    console.log('Searching expenses between:', startDateStr, 'and', endDateStr);
+
+    const expenses = await Expense.findAll({
+      where: {
+        date: {
+          [Op.between]: [startDateStr, endDateStr]
+        },
+        status: {
+          [Op.in]: ["Approved", "Paid"]
+        }
+      },
+      include: [
+        {
+          model: ExpenseCategory,
+          as: 'category',
+          attributes: ['categoryName'],
+          required: false
+        }
+      ],
+      attributes: [
+        "id", "expenseCode", "totalAmount", "date", "note", 
+        "isClientExpense", "clientId", "status", "paymentStatus"
+      ]
+    });
+
+    console.log(`Found ${expenses.length} expenses in date range`);
+
+    let total = 0;
+    const categories = {};
+    const details = [];
+
+    for (const expense of expenses) {
+      const expenseData = expense.get ? expense.get({ plain: true }) : expense;
+      
+      const amount = parseFloat(expenseData.totalAmount) || 0;
+      total += amount;
+      
+      const categoryName = expenseData.category?.categoryName || "Uncategorized";
+      
+      if (!categories[categoryName]) {
+        categories[categoryName] = 0;
+      }
+      categories[categoryName] += amount;
+
+      let clientInfo = null;
+      if (expenseData.isClientExpense && expenseData.clientId && expenseData.clientId > 0) {
+        clientInfo = await ClientInformation.findOne({
+          where: { id: expenseData.clientId },
+          attributes: ["fullName", "customerId", "userId"]
+        });
+      }
+
+      details.push({
+        id: expenseData.id,
+        expenseCode: expenseData.expenseCode,
+        category: categoryName,
+        amount: amount,
+        date: expenseData.date,
+        note: expenseData.note,
+        isClientExpense: expenseData.isClientExpense,
+        clientName: clientInfo?.fullName || null,
+        clientId: clientInfo?.customerId || null,
+        status: expenseData.status,
+        paymentStatus: expenseData.paymentStatus
+      });
+    }
+
+    console.log('Total expense calculated:', total);
+
+    // Format expense categories for display
+    const categoryBreakdown = Object.keys(categories).map(catName => ({
+      name: catName,
+      amount: formatCurrency(categories[catName]),
+    }));
+
+    return { total, categoryBreakdown, details };
+  } catch (error) {
+    console.error("Error calculating expenses:", error);
+    return { total: 0, categoryBreakdown: [], details: [] };
+  }
+};
+
+// Helper function to calculate referral commission
+const calculateReferralCommission = (client, clientStatus = "active") => {
   const COMMISSION_PER_ACTIVE_REFERRAL = 200;
   
-  if (client.referId && client.referId !== "N/A" && client.status === "active") {
+  if (client.referId && 
+      client.referId !== "N/A" && 
+      client.referId !== "null" && 
+      client.referId !== "" && 
+      clientStatus === "active") {
     return COMMISSION_PER_ACTIVE_REFERRAL;
   }
   return 0;
@@ -106,9 +303,6 @@ const calculateReferralCommission = (client) => {
 // Helper function to get assigned employee for a client
 const getAssignedEmployee = async (clientId) => {
   try {
-    // This depends on how you track assigned employees
-    // You might have a field in ClientInformation or a separate table
-    // For now, we'll check if userAddedBy exists and is an employee
     const client = await ClientInformation.findOne({
       where: { userId: clientId },
       attributes: ["userAddedBy"],
@@ -126,132 +320,43 @@ const getAssignedEmployee = async (clientId) => {
   }
 };
 
-// Helper function to calculate expenses for a client (installation costs, etc.)
-const calculateClientExpenses = async (clientId, startDate, endDate) => {
+// Helper function to get filter options
+const getFilterOptions = async () => {
   try {
-    // This would need a proper expense tracking system linked to clients
-    // For now, return 0 as placeholder
-    return 0;
-  } catch (error) {
-    console.error("Error calculating client expenses:", error);
-    return 0;
-  }
-};
-
-//! 1. MASTER REPORT (Income vs Expense Summary)
-const getMasterReport = async (req, res, next) => {
-  try {
-    const {
-      startDate,
-      endDate,
-      month,
-      year,
-    } = req.query;
-
-    // Determine date range
-    let start, end;
-    
-    if (month && year) {
-      // Specific month
-      const monthNum = parseInt(month);
-      const yearNum = parseInt(year);
-      start = new Date(yearNum, monthNum - 1, 1);
-      end = new Date(yearNum, monthNum, 0, 23, 59, 59, 999);
-    } else if (startDate && endDate) {
-      // Date range
-      start = new Date(startDate);
-      end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
-    } else {
-      // Default to current month
-      const now = new Date();
-      start = new Date(now.getFullYear(), now.getMonth(), 1);
-      end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-    }
-
-    // ============ CALCULATE INCOME ============
-    
-    // 1. Client Invoice Income (from transactions and employee payments)
-    
-    // Get approved transactions in date range
-    const transactions = await Transaction.findAll({
-      where: {
-        status: "approved",
-        createdAt: {
-          [Op.between]: [start, end]
-        }
+    // Get distinct zones (locations)
+    const zones = await ClientInformation.findAll({
+      where: { 
+        role: "client",
+        location: { [Op.ne]: null, [Op.ne]: "" } 
       },
-      attributes: ["amount"],
+      attributes: [[sequelize.fn("DISTINCT", sequelize.col("location")), "location"]],
     });
 
-    // Get employee payments in date range
-    const employeePayments = await EmployeePayment.findAll({
-      where: {
-        status: { [Op.in]: ["collected", "verified", "deposited"] },
-        collectionDate: {
-          [Op.between]: [start, end]
-        }
+    // Get distinct areas
+    const areas = await ClientInformation.findAll({
+      where: { 
+        role: "client",
+        area: { [Op.ne]: null, [Op.ne]: "" } 
       },
-      attributes: ["amount"],
+      attributes: [[sequelize.fn("DISTINCT", sequelize.col("area")), "area"]],
     });
 
-    // Calculate total client invoice income
-    let clientInvoiceTotal = 0;
-    transactions.forEach(t => clientInvoiceTotal += parseFloat(t.amount) || 0);
-    employeePayments.forEach(p => clientInvoiceTotal += parseFloat(p.amount) || 0);
+    // Get active packages
+    const packages = await Package.findAll({
+      where: { status: "Active" },
+      attributes: ["id", "packageName"],
+    });
 
-    // 2. Other Income (if any) - you can add other income sources here
-    const otherIncome = 0;
-
-    // Total Income
-    const totalIncome = clientInvoiceTotal + otherIncome;
-
-    // ============ CALCULATE EXPENSES ============
-    
-    // Get all expenses in date range
-    const expenses = await Expense.findAll({
-      where: {
-        date: {
-          [Op.between]: [start.toISOString().split('T')[0], end.toISOString().split('T')[0]]
-        },
-        status: { [Op.in]: ["Approved", "Paid"] }
+    // Get employees (from authority-informations)
+    const employees = await AuthorityInformation.findAll({
+      where: { 
+        role: { [Op.in]: ["Admin", "Employee", "Super-Admin"] },
+        status: "active"
       },
-      include: [
-        {
-          model: ExpenseCategory,
-          as: 'category',
-          attributes: ['categoryName'],
-        }
-      ],
-      attributes: ["totalAmount", "expenseCategoryId"],
+      attributes: ["userId", "fullName"],
     });
 
-    // Calculate total expenses
-    let totalExpense = 0;
-    const expenseCategories = {};
-
-    expenses.forEach(expense => {
-      const amount = parseFloat(expense.totalAmount) || 0;
-      totalExpense += amount;
-      
-      const categoryName = expense.category?.categoryName || "Uncategorized";
-      if (!expenseCategories[categoryName]) {
-        expenseCategories[categoryName] = 0;
-      }
-      expenseCategories[categoryName] += amount;
-    });
-
-    // Format expense categories for display
-    const expenseCategoryBreakdown = Object.keys(expenseCategories).map(catName => ({
-      name: catName,
-      amount: formatCurrency(expenseCategories[catName]),
-    }));
-
-    // ============ CALCULATE NET INCOME ============
-    const netIncome = totalIncome - totalExpense;
-    const profitMargin = totalIncome > 0 ? ((netIncome / totalIncome) * 100).toFixed(2) : "0.00";
-
-    // Get available years and months for filters
+    // Get years and months for filters
     const currentYear = new Date().getFullYear();
     const years = [];
     for (let y = currentYear - 5; y <= currentYear + 1; y++) {
@@ -273,6 +378,107 @@ const getMasterReport = async (req, res, next) => {
       { value: "12", name: "December" },
     ];
 
+    return {
+      zones: zones.map(z => z.location).filter(Boolean),
+      areas: areas.map(a => a.area).filter(Boolean),
+      packages: packages.map(p => ({ id: p.id, name: p.packageName })),
+      employees: employees.map(e => ({ userId: e.userId, name: e.fullName })),
+      years,
+      months,
+      statuses: ["active", "pending", "inactive"],
+    };
+  } catch (error) {
+    console.error("Error getting filter options:", error);
+    return {
+      zones: [], areas: [], packages: [], employees: [], years: [], months: [], statuses: []
+    };
+  }
+};
+
+//! ==================== 1. MASTER REPORT (Income vs Expense Summary) ====================
+//! ==================== 1. MASTER REPORT (Income vs Expense Summary) ====================
+const getMasterReport = async (req, res, next) => {
+  try {
+    const {
+      startDate,
+      endDate,
+      month,
+      year,
+    } = req.query;
+
+    // Determine date range
+    let start, end;
+    
+    // Case 1: Both month and year provided
+    if (month && month !== '' && year && year !== '') {
+      const monthNum = parseInt(month);
+      const yearNum = parseInt(year);
+      start = new Date(yearNum, monthNum - 1, 1);
+      end = new Date(yearNum, monthNum, 0, 23, 59, 59, 999);
+      console.log(`Filtering by specific month: ${month}/${year}`);
+    }
+    // Case 2: Only year provided (full year)
+    else if (year && year !== '' && (!month || month === '')) {
+      const yearNum = parseInt(year);
+      start = new Date(yearNum, 0, 1); // Jan 1
+      end = new Date(yearNum, 11, 31, 23, 59, 59, 999); // Dec 31
+      console.log(`Filtering by full year: ${year}`);
+    }
+    // Case 3: Date range provided
+    else if (startDate && startDate !== '' && endDate && endDate !== '') {
+      start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      console.log(`Filtering by date range: ${startDate} to ${endDate}`);
+    }
+    // Case 4: Default to current month
+    else {
+      const now = new Date();
+      start = new Date(now.getFullYear(), now.getMonth(), 1);
+      end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+      console.log(`Default to current month: ${start} to ${end}`);
+    }
+
+    console.log('Final date range:', {
+      start: start.toISOString(),
+      end: end.toISOString(),
+      startDateStr: start.toISOString().split('T')[0],
+      endDateStr: end.toISOString().split('T')[0]
+    });
+
+    // ============ CALCULATE INCOME ============
+    
+    // 1. Income from Client Transactions
+    const transactionIncome = await calculateTransactionIncome(start, end);
+    
+    // 2. Income from Employee Collections
+    const employeeCollectionIncome = await calculateEmployeeCollectionIncome(start, end);
+
+    console.log('Income:', {
+      transactions: transactionIncome.total,
+      employeeCollections: employeeCollectionIncome.total,
+      total: transactionIncome.total + employeeCollectionIncome.total
+    });
+
+    // Total Income
+    const totalIncome = transactionIncome.total + employeeCollectionIncome.total;
+
+    // ============ CALCULATE EXPENSES ============
+    const expenseData = await calculateExpenses(start, end);
+
+    console.log('Expense total:', expenseData.total);
+    
+    // ============ CALCULATE NET INCOME ============
+    const netIncome = totalIncome - expenseData.total;
+    const profitMargin = totalIncome > 0 ? ((netIncome / totalIncome) * 100).toFixed(2) : "0.00";
+
+    // Get filter options
+    const filterOptions = await getFilterOptions();
+
+    // Get user info (would come from logged in user)
+    const generatedBy = req.user?.fullName || "System";
+
     res.status(200).json({
       success: true,
       data: {
@@ -289,28 +495,35 @@ const getMasterReport = async (req, res, next) => {
           endDate: formatDate(end),
         },
         generatedDate: formatDate(new Date()),
-        generatedBy: "Shamim Rony", // This would come from logged in user
+        generatedBy: generatedBy,
         income: {
-          clientInvoice: formatCurrency(clientInvoiceTotal),
-          otherIncome: formatCurrency(otherIncome),
+          clientTransactions: {
+            total: formatCurrency(transactionIncome.total),
+            details: transactionIncome.details
+          },
+          employeeCollections: {
+            total: formatCurrency(employeeCollectionIncome.total),
+            details: employeeCollectionIncome.details
+          },
           totalIncome: formatCurrency(totalIncome),
         },
         expense: {
-          totalExpense: formatCurrency(totalExpense),
-          categories: expenseCategoryBreakdown,
+          totalExpense: formatCurrency(expenseData.total),
+          categories: expenseData.categoryBreakdown,
+          details: expenseData.details,
         },
         netIncome: formatCurrency(netIncome),
         calculationNote: "Net Income = Total Income - Total Expense",
       },
       summary: {
         totalIncome: formatCurrency(totalIncome),
-        totalExpense: formatCurrency(totalExpense),
+        totalExpense: formatCurrency(expenseData.total),
         netIncome: formatCurrency(netIncome),
         profitMargin: profitMargin + "%",
       },
       filters: {
-        years,
-        months,
+        years: filterOptions.years,
+        months: filterOptions.months,
       },
     });
   } catch (error) {
@@ -319,7 +532,26 @@ const getMasterReport = async (req, res, next) => {
   }
 };
 
-//! 2. NEW CONNECTION REPORT
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//! ==================== 2. NEW CONNECTION REPORT ====================
 const getNewConnectionReport = async (req, res, next) => {
   try {
     const {
@@ -327,7 +559,6 @@ const getNewConnectionReport = async (req, res, next) => {
       endDate,
       location,
       area,
-      zone,
       packageId,
       status,
       assignedEmployee,
@@ -352,10 +583,12 @@ const getNewConnectionReport = async (req, res, next) => {
 
     // Location/Zone filters
     if (location) whereClause.location = location;
-    if (zone) whereClause.location = zone;
     if (area) whereClause.area = area;
     if (packageId) whereClause.package = packageId;
     if (status) whereClause.status = status;
+    
+    // Employee filter (by userAddedBy)
+    if (assignedEmployee) whereClause.userAddedBy = assignedEmployee;
 
     // Get total count
     const totalCount = await ClientInformation.count({ where: whereClause });
@@ -402,7 +635,7 @@ const getNewConnectionReport = async (req, res, next) => {
           }
         }
 
-        // Use costForPackage if available
+        // Use costForPackage if available (overrides package price)
         if (clientData.costForPackage) {
           monthlyBill = parseFloat(clientData.costForPackage) || 0;
         }
@@ -411,7 +644,11 @@ const getNewConnectionReport = async (req, res, next) => {
         let referralName = "None";
         let referralCommission = 0;
         
-        if (clientData.referId && clientData.referId !== "N/A" && clientData.referId !== "null") {
+        if (clientData.referId && 
+            clientData.referId !== "N/A" && 
+            clientData.referId !== "null" && 
+            clientData.referId !== "") {
+          
           // Check if referrer is a client
           const referrerClient = await ClientInformation.findOne({
             where: { userId: clientData.referId },
@@ -428,22 +665,43 @@ const getNewConnectionReport = async (req, res, next) => {
             });
             if (referrerEmployee) {
               referralName = referrerEmployee.fullName;
+            } else {
+              referralName = clientData.referId;
             }
           }
           
           // Calculate referral commission
-          referralCommission = calculateReferralCommission(clientData);
+          referralCommission = calculateReferralCommission(clientData, clientData.status);
         }
 
         // Get assigned employee
         const assignedEmployeeName = await getAssignedEmployee(clientData.userId);
 
-        // Calculate expenses for this connection (installation costs, etc.)
-        const connectionExpenses = await calculateClientExpenses(
-          clientData.userId, 
-          clientData.createdAt, 
-          clientData.createdAt
-        );
+        // Calculate expenses for this connection (from Expense table where isClientExpense=true)
+        let connectionExpenses = 0;
+        try {
+          const clientDbRecord = await ClientInformation.findOne({
+            where: { userId: clientData.userId },
+            attributes: ["id"]
+          });
+          
+          if (clientDbRecord && clientDbRecord.id) {
+            const expenses = await Expense.findAll({
+              where: {
+                clientId: clientDbRecord.id,
+                isClientExpense: true,
+                status: { [Op.in]: ["Approved", "Paid"] }
+              },
+              attributes: ["totalAmount"]
+            });
+            
+            expenses.forEach(exp => {
+              connectionExpenses += parseFloat(exp.totalAmount) || 0;
+            });
+          }
+        } catch (error) {
+          console.error("Error calculating client expenses:", error);
+        }
 
         // Format date
         const connectionDate = formatDate(clientData.createdAt);
@@ -479,39 +737,10 @@ const getNewConnectionReport = async (req, res, next) => {
       : 0;
 
     // Get filter options
-    const zones = await ClientInformation.findAll({
-      where: { role: "client" },
-      attributes: [[sequelize.fn("DISTINCT", sequelize.col("location")), "location"]],
-      where: { location: { [Op.ne]: null } },
-    });
+    const filterOptions = await getFilterOptions();
 
-    const areas = await ClientInformation.findAll({
-      where: { role: "client" },
-      attributes: [[sequelize.fn("DISTINCT", sequelize.col("area")), "area"]],
-      where: { area: { [Op.ne]: null } },
-    });
-
-    const packages = await Package.findAll({
-      where: { status: "Active" },
-      attributes: ["id", "packageName"],
-    });
-
-    // Get unique employees (from userAddedBy)
-    const employees = await ClientInformation.findAll({
-      attributes: [[sequelize.fn("DISTINCT", sequelize.col("userAddedBy")), "userAddedBy"]],
-      where: { 
-        userAddedBy: { [Op.ne]: null, [Op.ne]: "" } 
-      },
-    });
-
-    const employeeNames = await Promise.all(
-      employees.map(async (item) => {
-        const userId = item.userAddedBy;
-        if (!userId) return null;
-        const name = await getUserName(userId);
-        return { userId, name };
-      })
-    ).then(results => results.filter(Boolean));
+    // Get user info (would come from logged in user)
+    const generatedBy = req.user?.fullName || "System";
 
     res.status(200).json({
       success: true,
@@ -528,7 +757,7 @@ const getNewConnectionReport = async (req, res, next) => {
           endDate: endDate ? formatDate(endDate) : "Current",
         },
         generatedDate: formatDate(new Date()),
-        generatedBy: "Shamim Rony", // This would come from logged in user
+        generatedBy: generatedBy,
         connections: connectionItems,
       },
       summary: {
@@ -540,11 +769,11 @@ const getNewConnectionReport = async (req, res, next) => {
         averageMonthlyBill: formatCurrency(averageMonthlyBill),
       },
       filters: {
-        zones: zones.map(z => z.location).filter(Boolean),
-        areas: areas.map(a => a.area).filter(Boolean),
-        packages: packages.map(p => ({ id: p.id, name: p.packageName })),
-        employees: employeeNames,
-        statuses: ["active", "pending", "inactive"],
+        zones: filterOptions.zones,
+        areas: filterOptions.areas,
+        packages: filterOptions.packages,
+        employees: filterOptions.employees,
+        statuses: filterOptions.statuses,
       },
       pagination: {
         currentPage: pageNumber,

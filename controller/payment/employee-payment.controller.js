@@ -748,7 +748,7 @@ const getClientPaymentHistory = async (req, res) => {
   }
 };
 
-//! 7. Admin: Get All Employee Collections - FIXED VERSION
+//! 7. Admin: Get All Employee Collections - FIXED VERSION (with discount handling)
 const getAllEmployeeCollections = async (req, res) => {
   try {
     const {
@@ -807,7 +807,7 @@ const getAllEmployeeCollections = async (req, res) => {
     // Get total count
     const totalItems = await EmployeePayment.count({ where: whereClause });
 
-    // Get paginated data WITHOUT include first (to test)
+    // Get paginated data
     const payments = await EmployeePayment.findAll({
       where: whereClause,
       limit: limitNumber,
@@ -858,9 +858,15 @@ const getAllEmployeeCollections = async (req, res) => {
     // Transform payments to include email and clientDatabaseId
     const transformedPayments = payments.map((payment) => {
       const paymentData = payment.toJSON();
+      
+      // Calculate net amount (amount - discount)
+      const amount = parseFloat(paymentData.amount) || 0;
+      const discount = parseFloat(paymentData.discount) || 0;
+      const netAmount = amount - discount;
 
       return {
         ...paymentData,
+        netAmount: netAmount.toFixed(2), // Add net amount to response
         email: emailMap[paymentData.employeeId] || paymentData.employeeId,
         clientDatabaseId: clientMap[paymentData.clientId] || null,
       };
@@ -868,20 +874,42 @@ const getAllEmployeeCollections = async (req, res) => {
 
     const totalPages = Math.ceil(totalItems / limitNumber);
 
-    // Calculate summary statistics
-    const totalAmount = (await EmployeePayment.sum("amount", { where: whereClause })) || 0;
+    // Calculate summary statistics WITH discounts applied
+    let totalNetAmount = 0;
+    const employeeStatsMap = {};
 
-    // Group by employee for statistics
-    const employeeStats = await EmployeePayment.findAll({
-      where: whereClause,
-      attributes: [
-        "employeeId",
-        "employeeName",
-        [sequelize.fn("COUNT", sequelize.col("id")), "collectionCount"],
-        [sequelize.fn("SUM", sequelize.col("amount")), "totalAmount"],
-      ],
-      group: ["employeeId", "employeeName"],
-    });
+    // Calculate net amounts manually to account for discounts
+    for (const payment of payments) {
+      const amount = parseFloat(payment.amount) || 0;
+      const discount = parseFloat(payment.discount) || 0;
+      const netAmount = amount - discount;
+      
+      totalNetAmount += netAmount;
+
+      // Group by employee for statistics
+      const empId = payment.employeeId;
+      const empName = payment.employeeName;
+      
+      if (!employeeStatsMap[empId]) {
+        employeeStatsMap[empId] = {
+          employeeId: empId,
+          employeeName: empName,
+          collectionCount: 0,
+          totalNetAmount: 0
+        };
+      }
+      
+      employeeStatsMap[empId].collectionCount++;
+      employeeStatsMap[empId].totalNetAmount += netAmount;
+    }
+
+    // Convert employee stats map to array
+    const employeeStats = Object.values(employeeStatsMap).map(stat => ({
+      employeeId: stat.employeeId,
+      employeeName: stat.employeeName,
+      collectionCount: stat.collectionCount,
+      totalNetAmount: parseFloat(stat.totalNetAmount.toFixed(2))
+    }));
 
     res.status(200).json({
       success: true,
@@ -889,7 +917,9 @@ const getAllEmployeeCollections = async (req, res) => {
       data: transformedPayments,
       statistics: {
         totalCollections: totalItems,
-        totalAmount: parseFloat(totalAmount.toFixed(2)),
+        totalGrossAmount: parseFloat((await EmployeePayment.sum("amount", { where: whereClause }) || 0).toFixed(2)),
+        totalNetAmount: parseFloat(totalNetAmount.toFixed(2)),
+        totalDiscount: parseFloat((totalNetAmount - (await EmployeePayment.sum("amount", { where: whereClause }) || 0)).toFixed(2)),
         employeeStats: employeeStats,
       },
       pagination: {
