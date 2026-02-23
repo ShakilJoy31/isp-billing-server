@@ -564,28 +564,38 @@ const getTodaysCollections = async (req, res) => {
 //! 5. Search Client for Payment
 const searchClientForPayment = async (req, res) => {
   try {
-    const { search } = req.query;
+    const { search, userId } = req.query;
 
-    if (!search || search.length < 2) {
+    // Build where clause dynamically
+    const whereClause = {
+      status: 'active',
+      role: "client",
+    };
+
+    // If userId is provided, add exact match filter
+    if (userId) {
+      whereClause.userId = userId;
+    }
+    
+    // If search is provided (and userId is not provided), add search filters
+    if (search && search.length >= 2 && !userId) {
+      whereClause[Op.or] = [
+        { customerId: { [Op.like]: `%${search}%` } },
+        { userId: { [Op.like]: `%${search}%` } },
+        { fullName: { [Op.like]: `%${search}%` } },
+        { mobileNo: { [Op.like]: `%${search}%` } },
+        { nidOrPassportNo: { [Op.like]: `%${search}%` } },
+      ];
+    } else if (!userId && (!search || search.length < 2)) {
       return res.status(400).json({
         success: false,
-        message: "Please provide at least 2 characters to search",
+        message: userId ? "User ID required" : "Please provide at least 2 characters to search",
       });
     }
 
     const clients = await ClientInformation.findAll({
-      where: {
-        [Op.or]: [
-          { customerId: { [Op.like]: `%${search}%` } },
-          { userId: { [Op.like]: `%${search}%` } },
-          { fullName: { [Op.like]: `%${search}%` } },
-          { mobileNo: { [Op.like]: `%${search}%` } },
-          { nidOrPassportNo: { [Op.like]: `%${search}%` } },
-        ],
-        status: 'active',
-        role: "client",
-      },
-      limit: 20, // Fixed: Reduced from 2,000,000 for performance
+      where: whereClause,
+      limit: userId ? 1 : 20, // If userId is provided, limit to 1 result
       attributes: [
         "userId",
         "customerId",
@@ -600,14 +610,23 @@ const searchClientForPayment = async (req, res) => {
         "houseNo",
         "roadNo",
       ],
+      order: userId ? [] : [['fullName', 'ASC']], // Order by name for search results
     });
+
+    // If userId was provided and no client found
+    if (userId && clients.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Client not found with the provided userId",
+      });
+    }
 
     const packageIds = [
       ...new Set(
         clients
           .map((client) => client.package)
-          .filter((id) => id && !isNaN(id)) // Filter out non-numeric IDs
-          .map((id) => parseInt(id)) // Convert string to number
+          .filter((id) => id && !isNaN(id))
+          .map((id) => parseInt(id))
       ),
     ];
 
@@ -656,9 +675,9 @@ const searchClientForPayment = async (req, res) => {
         email: clientData.email,
         package: packageMap[packageId]
           ? packageMap[packageId].name
-          : clientData.package, // Use name if found, otherwise original value
+          : clientData.package,
         packageDetails: packageMap[packageId] || null,
-        packageId: clientData.package, // Keep original ID
+        packageId: clientData.package,
         costForPackage: clientData.costForPackage,
         area: clientData.area,
         flatAptNo: clientData.flatAptNo,
@@ -666,6 +685,15 @@ const searchClientForPayment = async (req, res) => {
         roadNo: clientData.roadNo,
       };
     });
+
+    // If userId was provided, return single object instead of array
+    if (userId && transformedClients.length === 1) {
+      return res.status(200).json({
+        success: true,
+        message: "Client found",
+        data: transformedClients[0],
+      });
+    }
 
     res.status(200).json({
       success: true,
