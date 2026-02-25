@@ -1,6 +1,7 @@
 const sequelize = require("../../database/connection");
 const { Op } = require("sequelize");
 const BankAccount = require("../../models/account/account.model");
+const TransferHistory = require("../../models/account/transfer-history.model");
 
 //! Create new bank account
 const createBankAccount = async (req, res, next) => {
@@ -71,50 +72,49 @@ const createBankAccount = async (req, res, next) => {
     });
   } catch (error) {
     console.error("Error creating bank account:", error);
-    
+
     // Handle unique constraint error
-    if (error.name === 'SequelizeUniqueConstraintError') {
+    if (error.name === "SequelizeUniqueConstraintError") {
       return res.status(409).json({
         success: false,
         message: `An account with bank name "${req.body.bankName}" and account number "${req.body.accountNumber}" already exists!`,
       });
     }
-    
+
     next(error);
   }
 };
 
-
 const checkCombination = async (req, res) => {
   try {
     const { bankName, accountNumber } = req.query;
-    
+
     if (!bankName || !accountNumber) {
       return res.status(400).json({
         success: false,
-        message: 'Bank name and account number are required'
+        message: "Bank name and account number are required",
       });
     }
-    
+
     const existingAccount = await BankAccount.findOne({
       where: {
         bankName: bankName,
-        accountNumber: accountNumber
-      }
+        accountNumber: accountNumber,
+      },
     });
-    
+
     return res.status(200).json({
       success: true,
-      exists: !!existingAccount
+      exists: !!existingAccount,
     });
   } catch (error) {
-    console.error('Error checking combination:', error);
+    console.error("Error checking combination:", error);
     return res.status(500).json({
       success: false,
-      message: 'Error checking account combination'
+      message: "Error checking account combination",
     });
   }
-}
+};
 
 //! Get all bank accounts with filtering and pagination
 const getAllBankAccounts = async (req, res, next) => {
@@ -703,6 +703,390 @@ const getAccountsByType = async (req, res, next) => {
   }
 };
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//! Balance transfer
+
+//! Transfer balance between accounts
+const transferBalance = async (req, res, next) => {
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat("en-BD", {
+      style: "currency",
+      currency: "BDT",
+      minimumFractionDigits: 2,
+    }).format(amount);
+  };
+
+  const transaction = await sequelize.transaction();
+
+  try {
+    const {
+      fromAccountId,
+      toAccountId,
+      amount,
+      description,
+      reference,
+      remarks,
+      receiptPhoto
+    } = req.body;
+
+    // Validation
+    if (!fromAccountId || !toAccountId || !amount) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields: fromAccountId, toAccountId, amount",
+      });
+    }
+
+    if (fromAccountId === toAccountId) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: "Cannot transfer to the same account",
+      });
+    }
+
+    if (amount <= 0) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: "Amount must be greater than 0",
+      });
+    }
+
+    // Get both accounts
+    const fromAccount = await BankAccount.findOne({
+      where: { id: fromAccountId, isActive: true },
+      transaction
+    });
+
+    const toAccount = await BankAccount.findOne({
+      where: { id: toAccountId, isActive: true },
+      transaction
+    });
+
+    if (!fromAccount) {
+      await transaction.rollback();
+      return res.status(404).json({
+        success: false,
+        message: "Source account not found or is inactive",
+      });
+    }
+
+    if (!toAccount) {
+      await transaction.rollback();
+      return res.status(404).json({
+        success: false,
+        message: "Destination account not found or is inactive",
+      });
+    }
+
+    const transferAmount = parseFloat(amount);
+    const fromCurrentBalance = parseFloat(fromAccount.currentBalance);
+
+    // Check sufficient balance
+    if (fromCurrentBalance < transferAmount) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: `Insufficient balance in source account. Available: ${formatCurrency(fromCurrentBalance)}`,
+      });
+    }
+
+    // Check daily limit for source account
+    if (fromAccount.dailyLimit && transferAmount > fromAccount.dailyLimit) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: `Transfer amount exceeds daily limit of ${formatCurrency(fromAccount.dailyLimit)}`,
+      });
+    }
+
+    // Check monthly limit for source account
+    if (fromAccount.monthlyLimit && transferAmount > fromAccount.monthlyLimit) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: `Transfer amount exceeds monthly limit of ${formatCurrency(fromAccount.monthlyLimit)}`,
+      });
+    }
+
+    // Store previous balances
+    const previousFromBalance = parseFloat(fromAccount.currentBalance);
+    const previousToBalance = parseFloat(toAccount.currentBalance);
+
+    // Calculate new balances
+    const newFromBalance = previousFromBalance - transferAmount;
+    const newToBalance = previousToBalance + transferAmount;
+
+    // Update both accounts
+    await fromAccount.update({
+      currentBalance: newFromBalance,
+      lastTransactionDate: new Date(),
+      updatedBy: req.user?.id || "admin",
+    }, { transaction });
+
+    await toAccount.update({
+      currentBalance: newToBalance,
+      lastTransactionDate: new Date(),
+      updatedBy: req.user?.id || "admin",
+    }, { transaction });
+
+    // Create transfer history record
+    const transferHistory = await TransferHistory.create({
+      fromAccountId,
+      toAccountId,
+      fromAccountNumber: fromAccount.accountNumber,
+      toAccountNumber: toAccount.accountNumber,
+      fromBankName: fromAccount.bankName,
+      toBankName: toAccount.bankName,
+      fromAccountName: fromAccount.accountName,
+      toAccountName: toAccount.accountName,
+      amount: transferAmount,
+      previousFromBalance,
+      previousToBalance,
+      newFromBalance,
+      newToBalance,
+      description: description || `Transfer from ${fromAccount.accountName} to ${toAccount.accountName}`,
+      reference: reference || `TRF-${Date.now()}`,
+      status: 'completed',
+      initiatedBy: req.user?.id || "admin",
+      remarks,
+      receiptPhoto: receiptPhoto || null,
+    }, { transaction });
+
+    await transaction.commit();
+
+    return res.status(200).json({
+      success: true,
+      message: "Balance transferred successfully!",
+      data: {
+        transferId: transferHistory.id,
+        fromAccount: {
+          id: fromAccount.id,
+          accountNumber: fromAccount.accountNumber,
+          accountName: fromAccount.accountName,
+          bankName: fromAccount.bankName,
+          previousBalance: previousFromBalance,
+          newBalance: newFromBalance,
+        },
+        toAccount: {
+          id: toAccount.id,
+          accountNumber: toAccount.accountNumber,
+          accountName: toAccount.accountName,
+          bankName: toAccount.bankName,
+          previousBalance: previousToBalance,
+          newBalance: newToBalance,
+        },
+        amount: transferAmount,
+        description: transferHistory.description,
+        reference: transferHistory.reference,
+        transferDate: transferHistory.transferDate,
+        receiptPhoto: transferHistory.receiptPhoto,
+        formatted: {
+          amount: formatCurrency(transferAmount),
+          fromPreviousBalance: formatCurrency(previousFromBalance),
+          fromNewBalance: formatCurrency(newFromBalance),
+          toPreviousBalance: formatCurrency(previousToBalance),
+          toNewBalance: formatCurrency(newToBalance),
+        },
+      },
+    });
+
+  } catch (error) {
+    await transaction.rollback();
+    console.error("Error transferring balance:", error);
+    next(error);
+  }
+};
+
+//! Get transfer history with pagination and filters
+const getTransferHistory = async (req, res, next) => {
+  try {
+    const {
+      page = 1,
+      limit = 10,
+      fromAccountId,
+      toAccountId,
+      startDate,
+      endDate,
+      minAmount,
+      maxAmount,
+      status,
+      search,
+      sortBy = "transferDate",
+      sortOrder = "DESC",
+    } = req.query;
+
+    // Build where clause
+    const whereClause = {};
+
+    // Filter by accounts
+    if (fromAccountId && fromAccountId !== "") {
+      whereClause.fromAccountId = fromAccountId;
+    }
+
+    if (toAccountId && toAccountId !== "") {
+      whereClause.toAccountId = toAccountId;
+    }
+
+    // Date range filter
+    if (startDate || endDate) {
+      whereClause.transferDate = {};
+      if (startDate && startDate !== "") {
+        whereClause.transferDate[Op.gte] = new Date(startDate);
+      }
+      if (endDate && endDate !== "") {
+        whereClause.transferDate[Op.lte] = new Date(endDate);
+      }
+    }
+
+    // Amount range filter
+    if (minAmount || maxAmount) {
+      whereClause.amount = {};
+      if (minAmount && minAmount !== "") {
+        whereClause.amount[Op.gte] = parseFloat(minAmount);
+      }
+      if (maxAmount && maxAmount !== "") {
+        whereClause.amount[Op.lte] = parseFloat(maxAmount);
+      }
+    }
+
+    // Status filter
+    if (status && status !== "") {
+      whereClause.status = status;
+    }
+
+    // Search filter
+    if (search && search !== "") {
+      whereClause[Op.or] = [
+        { fromAccountNumber: { [Op.like]: `%${search}%` } },
+        { toAccountNumber: { [Op.like]: `%${search}%` } },
+        { fromBankName: { [Op.like]: `%${search}%` } },
+        { toBankName: { [Op.like]: `%${search}%` } },
+        { fromAccountName: { [Op.like]: `%${search}%` } },
+        { toAccountName: { [Op.like]: `%${search}%` } },
+        { reference: { [Op.like]: `%${search}%` } },
+        { description: { [Op.like]: `%${search}%` } },
+      ];
+    }
+
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    // Validate sort order
+    const validSortOrders = ["ASC", "DESC"];
+    const finalSortOrder = validSortOrders.includes(sortOrder.toUpperCase())
+      ? sortOrder.toUpperCase()
+      : "DESC";
+
+    // Validate sort by field
+    const validSortFields = [
+      "transferDate",
+      "amount",
+      "fromBankName",
+      "toBankName",
+      "status",
+      "createdAt",
+    ];
+    const finalSortBy = validSortFields.includes(sortBy) ? sortBy : "transferDate";
+
+    const transfers = await TransferHistory.findAndCountAll({
+      where: whereClause,
+      order: [[finalSortBy, finalSortOrder]],
+      limit: parseInt(limit),
+      offset: offset,
+    });
+
+    // Calculate summary statistics
+    const totalTransferred = await TransferHistory.sum('amount', {
+      where: whereClause,
+    });
+
+    const averageTransfer = await TransferHistory.findOne({
+      attributes: [
+        [sequelize.fn("AVG", sequelize.col("amount")), "averageAmount"],
+      ],
+      where: whereClause,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Transfer history retrieved successfully!",
+      data: transfers.rows,
+      meta: {
+        totalItems: transfers.count,
+        totalPages: Math.ceil(transfers.count / parseInt(limit)),
+        currentPage: parseInt(page),
+        itemsPerPage: parseInt(limit),
+        summary: {
+          totalTransferred: totalTransferred || 0,
+          averageTransfer: averageTransfer?.dataValues?.averageAmount || 0,
+          totalTransfers: transfers.count,
+        },
+      },
+    });
+
+  } catch (error) {
+    console.error("Error retrieving transfer history:", error);
+    next(error);
+  }
+};
+
+//! Get transfer history by ID
+const getTransferHistoryById = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    if (!id || isNaN(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid transfer ID",
+      });
+    }
+
+    const transfer = await TransferHistory.findOne({
+      where: { id },
+    });
+
+    if (!transfer) {
+      return res.status(404).json({
+        success: false,
+        message: "Transfer history not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Transfer history retrieved successfully!",
+      data: transfer,
+    });
+
+  } catch (error) {
+    console.error("Error retrieving transfer history:", error);
+    next(error);
+  }
+};
+
 module.exports = {
   createBankAccount,
   checkCombination,
@@ -715,4 +1099,7 @@ module.exports = {
   getAccountsByType,
   updateAccountBalance,
   deleteBankAccountEntry,
+  transferBalance,
+  getTransferHistory,
+  getTransferHistoryById,
 };

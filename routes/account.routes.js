@@ -1,5 +1,5 @@
 const express = require("express");
-const { createBankAccount, getAllBankAccounts, getBankAccountById, updateBankAccount, deleteBankAccount, getBankAccountStats, getAccountsByBranch, getAccountsByType, updateAccountBalance, deleteBankAccountEntry, checkCombination } = require("../controller/account/account.controller");
+const { createBankAccount, getAllBankAccounts, getBankAccountById, updateBankAccount, deleteBankAccount, getBankAccountStats, getAccountsByBranch, getAccountsByType, updateAccountBalance, deleteBankAccountEntry, checkCombination, transferBalance, getTransferHistory, getTransferHistoryById } = require("../controller/account/account.controller");
 const { getAllPaymentMethods, getPaymentMethodById, upsertPaymentMethod, updatePaymentMethodStatus, deletePaymentMethod } = require("../controller/account/paymentMethod.controller");
 
 const router = express.Router();
@@ -18,6 +18,14 @@ router.get("/account-stats", getBankAccountStats);
 router.get("/branch-accounts/:branchId", getAccountsByBranch);
 router.get("/accounts-by-type/:type", getAccountsByType);
 router.put("/update-balance/:id", updateAccountBalance);
+
+
+
+
+//! Balance transfer
+router.post("/transfer-balance", transferBalance);
+router.get("/transfer-history", getTransferHistory);
+router.get("/transfer-history/:id", getTransferHistoryById);
 
 
 
